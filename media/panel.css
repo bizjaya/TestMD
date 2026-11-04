@@ -1,18 +1,31 @@
-/* TestMD panel — the No box, Mark test done, and the count bar. */
-.td-form { margin: 6px 0 8px; padding: 8px; border-radius: 6px; border: 1px solid var(--td-no-border); background: var(--td-no-bg); }
+/* TestMD panel — the No box, Mark test done, the count bar with the theme switch, and the menu splitter. */
+.td-form { margin: 6px 0 8px; padding: 8px; border-radius: 6px; border: 1px solid var(--tmd-no-border); background: var(--tmd-no-bg); }
 .td-form textarea { width: 100%; box-sizing: border-box; resize: vertical; font: inherit; padding: 6px 8px; border-radius: 5px;
-  border: 1px solid var(--td-no-border); color: var(--vscode-input-foreground); background: var(--vscode-input-background); }
+  border: 1px solid var(--tmd-no-border); color: var(--tmd-fg); background: var(--tmd-input-bg); }
 .td-form-row { display: flex; gap: 6px; margin-top: 6px; }
 .td-form button, .td-markdone { font: 600 12px/1 var(--vscode-font-family, system-ui, sans-serif); padding: 6px 12px;
-  border-radius: 5px; cursor: pointer; border: 1px solid var(--td-border); background: transparent; color: inherit; }
-.td-form .td-save { background: var(--td-no); border-color: var(--td-no); color: #fff; }
+  border-radius: 5px; cursor: pointer; border: 1px solid var(--tmd-border); background: transparent; color: inherit; }
+.td-form .td-save { background: var(--tmd-no); border-color: var(--tmd-no); color: #fff; }
 .td-markdone { margin-left: 12px; vertical-align: middle; font-size: 11px; padding: 4px 10px;
-  background: var(--td-yes); border-color: var(--td-yes); color: #fff; }
+  background: var(--tmd-yes); border-color: var(--tmd-yes); color: #fff; }
 
-#td-bar { position: fixed; right: 18px; bottom: 16px; z-index: 60; padding: 8px 14px; border-radius: 20px;
-  font: 12px/1.2 var(--vscode-font-family, system-ui, sans-serif); color: var(--vscode-editor-foreground);
-  background: var(--vscode-editorWidget-background, #ffffff); border: 1px solid var(--td-border);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, .18); }
-#td-bar.td-bar-bad { border-color: var(--td-no-border); }
-#td-bar .td-bar-no { color: var(--td-no); }
-#td-bar .td-bar-sep { display: inline-block; width: 1px; height: 12px; margin: 0 10px; vertical-align: -2px; background: var(--td-border); }
+#td-bar { position: fixed; right: 18px; bottom: 16px; z-index: 60; display: flex; align-items: center; padding: 6px 8px 6px 14px;
+  border-radius: 20px; font: 12px/1.2 var(--vscode-font-family, system-ui, sans-serif); color: var(--tmd-fg);
+  background: var(--tmd-widget-bg); border: 1px solid var(--tmd-border); box-shadow: 0 4px 14px var(--tmd-shadow); }
+#td-bar.td-bar-bad { border-color: var(--tmd-no-border); }
+#td-bar .td-bar-no { color: var(--tmd-no); }
+#td-bar .td-bar-sep { display: inline-block; width: 1px; height: 12px; margin: 0 10px; vertical-align: -2px; background: var(--tmd-border); }
+#td-bar .tmd-theme { display: inline-flex; margin-left: 10px; border: 1px solid var(--tmd-border); border-radius: 14px; overflow: hidden; }
+#td-bar .tmd-theme button { font: 600 11px/1 var(--vscode-font-family, system-ui, sans-serif); padding: 4px 9px; border: 0;
+  background: transparent; color: var(--tmd-muted); cursor: pointer; }
+#td-bar .tmd-theme button + button { border-left: 1px solid var(--tmd-border); }
+#td-bar .tmd-theme button[aria-pressed="true"] { background: var(--tmd-link); color: #ffffff; }
+
+/* The splitter between the floating menu and the page: drag to resize, double-click to reset. */
+#tmd-split { position: fixed; top: 0; bottom: 0; left: calc(var(--tmd-toc-w, 248px) - 3px); width: 7px; z-index: 55;
+  cursor: col-resize; background: transparent; }
+#tmd-split::after { content: ''; position: absolute; top: 0; bottom: 0; left: 3px; width: 1px; background: transparent; }
+#tmd-split:hover::after, #tmd-split.tmd-dragging::after { width: 3px; left: 2px; background: var(--tmd-link); }
+#tmd-split[hidden] { display: none; }
+body.tmd-resizing, body.tmd-resizing * { cursor: col-resize !important; user-select: none !important; }
+@media (max-width: 880px) { #tmd-split { display: none; } }

@@ -1,62 +1,74 @@
 /* TestMD — the checklist look. Loaded into VS Code's own Markdown preview and into the Run Checklist panel.
- * Follows the editor's light or dark theme. */
+ *
+ * Colours are tokens on <html>: light by default, dark when the editor is dark. The panel's Light / Dark switch sets
+ * html[data-tmd-theme], which then decides alone. */
 :root {
-  --td-accent: var(--vscode-textLink-foreground, #0969da);
-  --td-muted: var(--vscode-descriptionForeground, #6b7280);
-  --td-border: var(--vscode-panel-border, rgba(128, 128, 128, .35));
-  --td-menu-bg: var(--vscode-sideBar-background, #f7f9fc);
-  --td-hover: var(--vscode-list-hoverBackground, #e6f0ff);
-  --td-yes: #1a7f37; --td-yes-bg: #dafbe1; --td-yes-border: #4ac26b;
-  --td-no: #cf222e; --td-no-bg: #ffebe9; --td-no-border: #ff8182;
-  --td-mark: #fff3a3; --td-mark-ink: #1f2328;
+  --tmd-bg: #ffffff; --tmd-fg: #1f2328; --tmd-muted: #656d76; --tmd-border: #d0d7de; --tmd-link: #0969da;
+  --tmd-code-bg: #f6f8fa; --tmd-menu-bg: #f6f8fa; --tmd-hover: #e7f0fd; --tmd-widget-bg: #ffffff; --tmd-input-bg: #ffffff;
+  --tmd-shadow: rgba(31, 35, 40, .18);
+  --tmd-yes: #1a7f37; --tmd-yes-bg: #dafbe1; --tmd-yes-border: #4ac26b;
+  --tmd-no: #cf222e; --tmd-no-bg: #ffebe9; --tmd-no-border: #ff8182;
+  --tmd-mark: #fff3a3; --tmd-mark-ink: #1f2328;
+  --tmd-ps-bg: #f6ffed; --tmd-ps-fg: #389e0d; --tmd-ps-bd: #b7eb8f;
+  --tmd-pw-bg: #fff7e6; --tmd-pw-fg: #d46b08; --tmd-pw-bd: #ffd591;
+  --tmd-pd-bg: #fff1f0; --tmd-pd-fg: #cf1322; --tmd-pd-bd: #ffa39e;
+  --tmd-pi-bg: #f0f9ff; --tmd-pi-fg: #096dd9; --tmd-pi-bd: #91d5ff;
+  --tmd-pm-bg: #fafafa; --tmd-pm-fg: #6b7280; --tmd-pm-bd: #e5e7eb;
 }
-body.vscode-dark, body.vscode-high-contrast {
-  --td-yes: #3fb950; --td-yes-bg: #12261e; --td-yes-border: #2ea043;
-  --td-no: #f85149; --td-no-bg: #2d1214; --td-no-border: #da3633;
-  --td-mark: #5c4a00; --td-mark-ink: #fff8c5;
+html:not([data-tmd-theme]):has(body.vscode-dark),
+html:not([data-tmd-theme]):has(body.vscode-high-contrast:not(.vscode-high-contrast-light)),
+html[data-tmd-theme="dark"] {
+  --tmd-bg: #0d1117; --tmd-fg: #e6edf3; --tmd-muted: #8d96a0; --tmd-border: #30363d; --tmd-link: #4493f8;
+  --tmd-code-bg: #161b22; --tmd-menu-bg: #161b22; --tmd-hover: #1f2a37; --tmd-widget-bg: #161b22; --tmd-input-bg: #0d1117;
+  --tmd-shadow: rgba(0, 0, 0, .5);
+  --tmd-yes: #3fb950; --tmd-yes-bg: #12261e; --tmd-yes-border: #2ea043;
+  --tmd-no: #f85149; --tmd-no-bg: #2d1214; --tmd-no-border: #da3633;
+  --tmd-mark: #5c4a00; --tmd-mark-ink: #fff8c5;
+  --tmd-ps-bg: #12261e; --tmd-ps-fg: #73d13d; --tmd-ps-bd: #274916;
+  --tmd-pw-bg: #2b1d0e; --tmd-pw-fg: #ffa940; --tmd-pw-bd: #593815;
+  --tmd-pd-bg: #2a1215; --tmd-pd-fg: #ff7875; --tmd-pd-bd: #58181c;
+  --tmd-pi-bg: #111d2c; --tmd-pi-fg: #69b1ff; --tmd-pi-bd: #15395b;
+  --tmd-pm-bg: #1f1f1f; --tmd-pm-fg: #a3a3a3; --tmd-pm-bd: #3a3a3a;
 }
 
 /* ── Pills: who, where, status.  <span class="pill info">Tester</span> ─────────────────────────────────── */
 .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 10.5px; font-weight: 600; line-height: 1.6;
         text-transform: uppercase; letter-spacing: .04em; border: 1px solid; vertical-align: middle; }
-.pill.success { background: #f6ffed; color: #389e0d; border-color: #b7eb8f; }
-.pill.warning { background: #fff7e6; color: #d46b08; border-color: #ffd591; }
-.pill.danger  { background: #fff1f0; color: #cf1322; border-color: #ffa39e; }
-.pill.info    { background: #f0f9ff; color: #096dd9; border-color: #91d5ff; }
-.pill.muted   { background: #fafafa; color: #6b7280; border-color: #e5e7eb; }
-body.vscode-dark .pill.success { background: #12261e; color: #73d13d; border-color: #274916; }
-body.vscode-dark .pill.warning { background: #2b1d0e; color: #ffa940; border-color: #593815; }
-body.vscode-dark .pill.danger  { background: #2a1215; color: #ff7875; border-color: #58181c; }
-body.vscode-dark .pill.info    { background: #111d2c; color: #69b1ff; border-color: #15395b; }
-body.vscode-dark .pill.muted   { background: #1f1f1f; color: #a3a3a3; border-color: #3a3a3a; }
+.pill.success { background: var(--tmd-ps-bg); color: var(--tmd-ps-fg); border-color: var(--tmd-ps-bd); }
+.pill.warning { background: var(--tmd-pw-bg); color: var(--tmd-pw-fg); border-color: var(--tmd-pw-bd); }
+.pill.danger  { background: var(--tmd-pd-bg); color: var(--tmd-pd-fg); border-color: var(--tmd-pd-bd); }
+.pill.info    { background: var(--tmd-pi-bg); color: var(--tmd-pi-fg); border-color: var(--tmd-pi-bd); }
+.pill.muted   { background: var(--tmd-pm-bg); color: var(--tmd-pm-fg); border-color: var(--tmd-pm-bd); }
 
 /* ── Highlights: <mark> = what must be true; <u> = a warning ───────────────────────────────────────────── */
-mark { background: var(--td-mark); color: var(--td-mark-ink); padding: 0 3px; border-radius: 3px; }
-u { text-decoration-color: var(--td-no); text-decoration-thickness: 2px; text-underline-offset: 2px; }
+mark { background: var(--tmd-mark); color: var(--tmd-mark-ink); padding: 0 3px; border-radius: 3px; }
+u { text-decoration-color: var(--tmd-no); text-decoration-thickness: 2px; text-underline-offset: 2px; }
 
 /* ── Done: a struck heading with the Done pill;  ### ~~2.1 Title~~ <span class="pill success">Done</span> ── */
 h1 > s, h2 > s, h3 > s, h4 > s, h5 > s, h6 > s, h1 > del, h2 > del, h3 > del, h4 > del, h5 > del, h6 > del {
-  color: var(--td-muted); text-decoration-thickness: 2px; }
+  color: var(--tmd-muted); text-decoration-thickness: 2px; }
 h1 > .pill, h2 > .pill, h3 > .pill, h4 > .pill, h5 > .pill, h6 > .pill { margin-left: 6px; }
 
-/* ── The floating menu: <nav class="doc-toc"> … </nav> (no blank lines inside) ─────────────────────────── */
-.doc-toc { position: fixed; top: 0; left: 0; bottom: 0; width: 248px; box-sizing: border-box; overflow-y: auto;
-  padding: 14px 12px 28px; background: var(--td-menu-bg); border-right: 1px solid var(--td-border);
+/* ── The floating menu: <nav class="doc-toc"> … </nav> (no blank lines inside). Its width is --tmd-toc-w, which
+ *    the panel's splitter changes. ───────────────────────────────────────────────────────────────────────── */
+.doc-toc { position: fixed; top: 0; left: 0; bottom: 0; width: var(--tmd-toc-w, 248px); box-sizing: border-box; overflow-y: auto;
+  padding: 14px 12px 28px; background: var(--tmd-menu-bg); color: var(--tmd-fg); border-right: 1px solid var(--tmd-border);
   font-size: 12.5px; line-height: 1.3; z-index: 50; }
 .doc-toc .doc-toc-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
-  padding: 2px 8px 10px; margin-bottom: 6px; border-bottom: 1px solid var(--td-border); }
+  padding: 2px 8px 10px; margin-bottom: 6px; border-bottom: 1px solid var(--tmd-border); }
 .doc-toc .doc-toc-group { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em;
-  color: var(--td-muted); margin: 13px 8px 3px; }
-.doc-toc a { display: block; padding: 5px 10px; margin: 1px 0; border-radius: 6px; color: var(--td-accent);
+  color: var(--tmd-muted); margin: 13px 8px 3px; }
+.doc-toc a { display: block; padding: 5px 10px; margin: 1px 0; border-radius: 6px; color: var(--tmd-link);
   text-decoration: none; overflow-wrap: anywhere; border-left: 2px solid transparent; }
-.doc-toc a:hover { background: var(--td-hover); border-left-color: var(--td-accent); }
-.doc-toc a.l2 { padding-left: 26px; font-size: 11.5px; border-left: 2px solid var(--td-border); }
-.doc-toc a.l3 { padding-left: 40px; font-size: 11px; border-left: 2px solid var(--td-border); }
+.doc-toc a:hover { background: var(--tmd-hover); border-left-color: var(--tmd-link); }
+.doc-toc a.l2 { padding-left: 26px; font-size: 11.5px; border-left: 2px solid var(--tmd-border); }
+.doc-toc a.l3 { padding-left: 40px; font-size: 11px; border-left: 2px solid var(--tmd-border); }
 .doc-toc .pill { font-size: 9px; padding: 0 5px; margin-left: 4px; }
-.doc-toc a:has(> .pill.success) { color: var(--td-muted); text-decoration: line-through; }
-body:has(.doc-toc) { margin-left: 248px !important; max-width: none !important; padding-inline: clamp(20px, 2.5vw, 44px) !important; }
+.doc-toc a:has(> .pill.success) { color: var(--tmd-muted); text-decoration: line-through; }
+body:has(.doc-toc) { margin-left: var(--tmd-toc-w, 248px) !important; max-width: none !important;
+  padding-inline: clamp(20px, 2.5vw, 44px) !important; }
 @media (max-width: 880px) {
-  .doc-toc { position: static; width: auto; border-right: none; border-bottom: 1px solid var(--td-border); margin-bottom: 18px; }
+  .doc-toc { position: static; width: auto; border-right: none; border-bottom: 1px solid var(--tmd-border); margin-bottom: 18px; }
   body:has(.doc-toc) { margin-left: auto !important; }
 }
 
@@ -66,25 +78,26 @@ ul.td-list { padding-left: 4px; }
 li.td-item { position: relative; margin: 4px 0; }
 .td-ctl { display: inline-flex; align-items: center; gap: 4px; margin-right: 8px; vertical-align: -3px; }
 .td-ctl button { font: 600 11px/1 var(--vscode-font-family, system-ui, sans-serif); cursor: pointer; border-radius: 5px;
-  border: 1px solid var(--td-border); background: transparent; color: var(--td-muted); padding: 3px 8px; }
-.td-ctl button:hover { border-color: var(--td-accent); color: var(--td-accent); }
+  border: 1px solid var(--tmd-border); background: transparent; color: var(--tmd-muted); padding: 3px 8px; }
+.td-ctl button:hover { border-color: var(--tmd-link); color: var(--tmd-link); }
 .td-ctl .td-tick { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; padding: 0; font-size: 12px; }
-.td-ctl .td-tick.td-on { background: var(--td-yes); border-color: var(--td-yes); color: #fff; }
-.td-ctl .td-yes.td-on { background: var(--td-yes); border-color: var(--td-yes); color: #fff; }
-.td-ctl .td-no.td-on { background: var(--td-no); border-color: var(--td-no); color: #fff; }
+.td-ctl .td-tick.td-on { background: var(--tmd-yes); border-color: var(--tmd-yes); color: #fff; }
+.td-ctl .td-yes.td-on { background: var(--tmd-yes); border-color: var(--tmd-yes); color: #fff; }
+.td-ctl .td-no.td-on { background: var(--tmd-no); border-color: var(--tmd-no); color: #fff; }
 /* VS Code's own preview shows the answer only */
-.td-badge { display: inline-block; min-width: 18px; margin-right: 8px; padding: 1px 6px; border-radius: 5px; font: 600 11px/1.4 var(--vscode-font-family, system-ui, sans-serif);
-  text-align: center; border: 1px solid var(--td-border); color: var(--td-muted); vertical-align: 1px; }
-.td-badge.td-yes { background: var(--td-yes); border-color: var(--td-yes); color: #fff; }
-.td-badge.td-no { background: var(--td-no); border-color: var(--td-no); color: #fff; }
-li.td-step.td-yes > p, li.td-step.td-yes { color: var(--td-muted); }
-li.td-check.td-no { border-left: 3px solid var(--td-no); padding-left: 8px; margin-left: -11px; }
-li.td-check.td-yes mark { background: var(--td-yes-bg); }
+.td-badge { display: inline-block; min-width: 18px; margin-right: 8px; padding: 1px 6px; border-radius: 5px; cursor: help;
+  font: 600 11px/1.4 var(--vscode-font-family, system-ui, sans-serif);
+  text-align: center; border: 1px solid var(--tmd-border); color: var(--tmd-muted); vertical-align: 1px; }
+.td-badge.td-yes { background: var(--tmd-yes); border-color: var(--tmd-yes); color: #fff; }
+.td-badge.td-no { background: var(--tmd-no); border-color: var(--tmd-no); color: #fff; }
+li.td-step.td-yes > p, li.td-step.td-yes { color: var(--tmd-muted); }
+li.td-check.td-no { border-left: 3px solid var(--tmd-no); padding-left: 8px; margin-left: -11px; }
+li.td-check.td-yes mark { background: var(--tmd-yes-bg); }
 
 /* The reason under a No, and older reasons (struck) */
-li.td-reason { list-style: none; color: var(--td-no); background: var(--td-no-bg); border: 1px solid var(--td-no-border);
+li.td-reason { list-style: none; color: var(--tmd-no); background: var(--tmd-no-bg); border: 1px solid var(--tmd-no-border);
   border-radius: 6px; padding: 4px 10px; margin: 6px 0; }
-li.td-reason-old { color: var(--td-muted); background: transparent; border-style: dashed; border-color: var(--td-border); }
+li.td-reason-old { color: var(--tmd-muted); background: transparent; border-style: dashed; border-color: var(--tmd-border); }
 
 /* VS Code's own preview: the read-only note (media/preview.js) */
 #tmd-note { position: fixed; right: 18px; bottom: 16px; z-index: 60; max-width: 420px; padding: 8px 14px; border-radius: 10px;
@@ -93,4 +106,3 @@ li.td-reason-old { color: var(--td-muted); background: transparent; border-style
 #tmd-note[hidden] { display: none; }
 #tmd-note .tmd-key { display: inline-flex; vertical-align: -3px; padding: 1px 3px; border-radius: 4px; background: #ffffff;
   border: 1px solid #d4a72c; color: #424242; }
-.td-badge { cursor: help; }

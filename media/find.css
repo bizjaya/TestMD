@@ -1,34 +1,30 @@
-/* TestMD find — the bar and the two highlights. */
+/* TestMD find — the bar and the two highlights. Colours come from the tokens in checklist.css. */
 ::highlight(bzf-all) { background-color: #fde68a; color: inherit; }
 ::highlight(bzf-cur) { background-color: #f97316; color: #ffffff; }
+html:not([data-tmd-theme]):has(body.vscode-dark) ::highlight(bzf-all),
+html[data-tmd-theme="dark"] ::highlight(bzf-all) { background-color: #7a5c00; color: #ffffff; }
 
 #bzf-bar {
   position: fixed; top: 10px; right: 18px; z-index: 2147483647;
   display: flex; align-items: center; gap: 4px;
   padding: 6px 8px; border-radius: 8px;
-  background: #ffffff; color: #1f2328; border: 1px solid #d0d7de;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, .16);
+  background: var(--tmd-widget-bg, #ffffff); color: var(--tmd-fg, #1f2328); border: 1px solid var(--tmd-border, #d0d7de);
+  box-shadow: 0 6px 18px var(--tmd-shadow, rgba(0, 0, 0, .16));
   font: 13px/1.2 -apple-system, "Segoe UI", system-ui, sans-serif;
 }
 #bzf-bar[hidden] { display: none; }
 #bzf-bar input {
-  width: 230px; padding: 4px 8px; border: 1px solid #d0d7de; border-radius: 6px;
-  font: inherit; color: inherit; background: #ffffff; outline: none;
+  width: 230px; padding: 4px 8px; border: 1px solid var(--tmd-border, #d0d7de); border-radius: 6px;
+  font: inherit; color: inherit; background: var(--tmd-input-bg, #ffffff); outline: none;
 }
-#bzf-bar input:focus { border-color: #0969da; box-shadow: 0 0 0 2px rgba(9, 105, 218, .2); }
-#bzf-bar.bzf-none input { border-color: #cf222e; background: #fff5f5; }
-#bzf-bar .bzf-count { min-width: 74px; padding: 0 4px; color: #57606a; font-size: 12px; text-align: center; white-space: nowrap; }
-#bzf-bar.bzf-none .bzf-count { color: #cf222e; }
+#bzf-bar input:focus { border-color: var(--tmd-link, #0969da); }
+#bzf-bar.bzf-none input { border-color: var(--tmd-no, #cf222e); }
+#bzf-bar .bzf-count { min-width: 74px; padding: 0 4px; color: var(--tmd-muted, #57606a); font-size: 12px; text-align: center; white-space: nowrap; }
+#bzf-bar.bzf-none .bzf-count { color: var(--tmd-no, #cf222e); }
 #bzf-bar button {
   min-width: 26px; height: 26px; padding: 0 6px; border: 1px solid transparent; border-radius: 6px;
   background: transparent; color: inherit; font: inherit; cursor: pointer;
 }
-#bzf-bar button:hover { background: #f3f4f6; border-color: #d0d7de; }
+#bzf-bar button:hover { background: var(--tmd-hover, #f3f4f6); border-color: var(--tmd-border, #d0d7de); }
 #bzf-bar .bzf-case { font-weight: 600; font-size: 12px; }
-#bzf-bar .bzf-case[aria-pressed="true"] { background: #ddf4ff; border-color: #54aeff; color: #0969da; }
-
-/* Dark themes */
-html:has(body.vscode-dark) #bzf-bar, html:has(body.vscode-high-contrast) #bzf-bar { background: #1f2328; color: #e6edf3; border-color: #3d444d; }
-html:has(body.vscode-dark) #bzf-bar input, html:has(body.vscode-high-contrast) #bzf-bar input { background: #0d1117; border-color: #3d444d; }
-html:has(body.vscode-dark) #bzf-bar button:hover { background: #2d333b; border-color: #3d444d; }
-html:has(body.vscode-dark) ::highlight(bzf-all) { background-color: #7a5c00; color: #ffffff; }
+#bzf-bar .bzf-case[aria-pressed="true"] { background: var(--tmd-link, #0969da); border-color: var(--tmd-link, #0969da); color: #ffffff; }

@@ -6,12 +6,17 @@ import { applyAnswer, doneable, markDone, readChecklist, stats, Action } from '.
 import { settings, userName, today } from './settings';
 
 interface FromWebview {
-  type: 'ready' | 'answer' | 'markDone' | 'open';
+  type: 'ready' | 'answer' | 'markDone' | 'open' | 'theme' | 'tocWidth';
   action?: Action;
   line?: number;
   reason?: string;
   href?: string;
+  value?: string | number;
 }
+
+const TOC_WIDTH_KEY = 'testmd.tocWidth';
+type PanelTheme = 'auto' | 'light' | 'dark';
+const panelTheme = (): PanelTheme => vscode.workspace.getConfiguration('testmd').get<PanelTheme>('panelTheme', 'auto');
 
 export class ChecklistPanel {
   private static readonly panels = new Map<string, ChecklistPanel>();
@@ -35,6 +40,9 @@ export class ChecklistPanel {
     panel.webview.html = this.shell();
     panel.onDidDispose(() => this.dispose(), null, this.disposables);
     panel.webview.onDidReceiveMessage((m: FromWebview) => this.onMessage(m), null, this.disposables);
+    vscode.workspace.onDidChangeConfiguration(e => {
+      if (e.affectsConfiguration('testmd.panelTheme')) void panel.webview.postMessage({ type: 'theme', theme: panelTheme() });
+    }, null, this.disposables);
     vscode.workspace.onDidChangeTextDocument(e => {
       if (e.document.uri.toString() !== uri.toString()) return;
       clearTimeout(this.timer);
@@ -52,22 +60,12 @@ export class ChecklistPanel {
     return this.panel.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', name));
   }
 
-  /** The workspace's own Markdown stylesheets ("markdown.styles"), so a doc looks as it does in VS Code's preview. */
-  private userStyles(): vscode.Uri[] {
-    const styles = vscode.workspace.getConfiguration('markdown', this.uri).get<string[]>('styles') ?? [];
-    const folder = vscode.workspace.getWorkspaceFolder(this.uri);
-    return styles.filter(s => !/^https?:/i.test(s)).map(s => {
-      const abs = path.isAbsolute(s) ? s : path.join(folder ? folder.uri.fsPath : path.dirname(this.uri.fsPath), s);
-      return this.panel.webview.asWebviewUri(vscode.Uri.file(abs));
-    });
-  }
-
   private shell(): string {
     const w = this.panel.webview;
     const nonce = Array.from({ length: 24 }, () => Math.floor(Math.random() * 36).toString(36)).join('');
     const base = w.asWebviewUri(vscode.Uri.file(path.dirname(this.uri.fsPath))).toString().replace(/\/?$/, '/');
     const css = ['base.css', 'checklist.css', 'find.css', 'panel.css'].map(n => this.asset(n));
-    const links = [...css, ...this.userStyles()].map(u => `<link rel="stylesheet" href="${u}">`).join('\n');
+    const links = css.map(u => `<link rel="stylesheet" href="${u}">`).join('\n');
     return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${w.cspSource} https: data:; style-src ${w.cspSource} 'unsafe-inline'; font-src ${w.cspSource}; script-src 'nonce-${nonce}';">
@@ -88,13 +86,22 @@ ${links}
     const { stepLabels } = settings(this.uri);
     const html = createRenderer({ interactive: true, stepLabels }).render(text);
     const list = readChecklist(text, stepLabels);
-    await this.panel.webview.postMessage({ type: 'render', html, stats: stats(list), doneable: doneable(list) });
+    await this.panel.webview.postMessage({
+      type: 'render', html, stats: stats(list), doneable: doneable(list),
+      theme: panelTheme(), tocWidth: this.context.globalState.get<number>(TOC_WIDTH_KEY),
+    });
   }
 
   private async onMessage(m: FromWebview): Promise<void> {
     try {
       if (m.type === 'ready') return void (await this.render());
       if (m.type === 'open' && m.href) return void (await this.open(m.href));
+      if (m.type === 'theme' && (m.value === 'auto' || m.value === 'light' || m.value === 'dark')) {
+        return void (await vscode.workspace.getConfiguration('testmd').update('panelTheme', m.value, vscode.ConfigurationTarget.Global));
+      }
+      if (m.type === 'tocWidth' && typeof m.value === 'number') {
+        return void (await this.context.globalState.update(TOC_WIDTH_KEY, m.value));
+      }
       if (m.type === 'answer' && m.action && typeof m.line === 'number') {
         const who = await userName(this.uri);
         await this.edit(text => applyAnswer(text, { action: m.action!, line: m.line!, reason: m.reason, who, date: today() },

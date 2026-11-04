@@ -100,6 +100,21 @@
           ],
           "description": "A list under a line ending in one of these words (for example \"**2.1 · Do**\") holds steps: a plain tick. Every other checkbox is a check: Yes or No.",
           "scope": "resource"
+        },
+        "testmd.panelTheme": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "light",
+            "dark"
+          ],
+          "enumDescriptions": [
+            "Follow the editor's theme",
+            "Always light",
+            "Always dark"
+          ],
+          "default": "auto",
+          "description": "The Run Checklist panel's colours, menu included. The Auto / Light / Dark switch at the bottom right of the panel sets this."
         }
       }
     },
