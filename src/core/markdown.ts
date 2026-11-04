@@ -17,6 +17,7 @@ export interface ChecklistOptions {
 export const BOX = /^\[( |x|X)\]\s+/;
 export const REASON = /^❌/;
 export const OLD_REASON = /^~~❌/;
+export const NOTE = /^(?:~~)?📝/;
 
 /** A short paragraph that starts in bold, or ends with a colon, is a block label: "**2.1 · Do**",
  *  "**2.1 · Pass when** *(after sending)*", "Steps:". The label is the bold part (or the whole line). */
@@ -53,8 +54,11 @@ function firstInline(tokens: Token[], from: number): number {
 
 function badge(kind: ItemKind, state: ItemState): string {
   const text = kind === 'step' ? (state === 'yes' ? '✓' : '&nbsp;') : state === 'yes' ? 'Yes' : state === 'no' ? 'No' : '?';
-  return `<span class="td-badge td-${state}" title="Read-only here. To answer, press ☑ Run Checklist at the top right.">${text}</span>`;
+  return `<span class="td-badge td-${state}" title="Read-only here. To answer, press Run Checklist (the square with a tick) at the top right.">${text}</span>`;
 }
+
+const noteButton = (line: number) =>
+  `<button class="td-notebtn" data-td-act="note" data-td-line="${line}" title="Add a note or a picture (paste with Ctrl+V)">Note</button>`;
 
 function controls(kind: ItemKind, state: ItemState, line: number, interactive: boolean): string {
   if (!interactive) return badge(kind, state);
@@ -96,7 +100,7 @@ function checklistRule(opts: ChecklistOptions) {
       }
       if (t.type !== 'list_item_open') continue;
       // Already drawn by another copy of this plugin (two versions loaded side by side until the editor restarts).
-      if (/(?:^|\s)td-(?:item|reason)(?:\s|$)/.test(t.attrGet('class') ?? '')) continue;
+      if (/(?:^|\s)td-(?:item|reason|note)(?:\s|$)/.test(t.attrGet('class') ?? '')) continue;
 
       const inl = firstInline(tokens, i);
       if (inl < 0) continue;
@@ -106,6 +110,7 @@ function checklistRule(opts: ChecklistOptions) {
         t.attrJoin('class', REASON.test(content) ? 'td-reason' : 'td-reason td-reason-old');
         continue;
       }
+      if (NOTE.test(content)) { t.attrJoin('class', 'td-note'); continue; }
       const m = BOX.exec(content);
       if (!m || !t.map) continue;
 
@@ -128,6 +133,11 @@ function checklistRule(opts: ChecklistOptions) {
       const ctl = new state.Token('html_inline', '', 0);
       ctl.content = controls(kind, st, line, opts.interactive);
       inline.children?.unshift(ctl);
+      if (opts.interactive) {
+        const note = new state.Token('html_inline', '', 0);
+        note.content = noteButton(line);
+        inline.children?.push(note);
+      }
     }
   };
 }

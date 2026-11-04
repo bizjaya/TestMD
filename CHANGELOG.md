@@ -7,5 +7,8 @@
   panel, and a floating menu you resize by dragging its edge.
 - Find (Ctrl+F) in the panel and in VS Code's own Markdown preview.
 - The checklist look (pills, highlights, done headings, floating menu, answer badges) in VS Code's own preview, which
-  stays read-only: a note says where to answer, and the ☑ Run Checklist button sits on the preview's tab too.
+  stays read-only: a note says where to answer, and the Run Checklist button sits on the preview's tab too.
 - New Checklist: a starter checklist from the template.
+- Notes on any step or check, with pictures pasted or dropped in (also in a No's reason): saved as WebP files beside the
+  checklist (`<name>.assets/<GUID>.webp`) and linked from it. Click a picture to see it full size.
+- Archive Round: copies the checklist and its pictures to `archive/<name>-<date>/`, then clears it for the next round.

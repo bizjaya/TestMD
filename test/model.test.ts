@@ -112,3 +112,26 @@ test('two copies of the plugin draw each item once', async () => {
   const html = md.render(DOC);
   assert.equal((html.match(/td-badge/g) ?? []).length, 4);
 });
+
+test('a note and a No carry pictures as lines under the item; a new round clears them', async () => {
+  const { clearRound, archiveFolderName } = await import('../src/core/model');
+  const pic = 'checklist.assets/3f2a.webp';
+  let text = answer(DOC, 7, 'tick');
+  text = applyAnswer(text, { line: 7, action: 'note', reason: 'Proof below.', images: [pic], who, date }, LABELS);
+  text = applyAnswer(text, { line: 13, action: 'no', reason: 'No name shown.', images: ['checklist.assets/my shot.webp'], who, date }, LABELS);
+  const lines = text.split('\n');
+  assert.equal(lines[8], '  - 📝 **Note** · 2026-11-04 · Ann — Proof below.');
+  assert.equal(lines[9], `    ![](${pic})`);
+  assert.ok(lines.includes('  - ❌ **No** · 2026-11-04 · Ann — No name shown.'));
+  assert.ok(lines.includes('    ![](checklist.assets/my%20shot.webp)'));
+  assert.throws(() => applyAnswer(text, { line: 7, action: 'note', reason: ' ', images: [], who, date }, LABELS), /note or paste/);
+
+  const html = createRenderer({ interactive: true, stepLabels: LABELS }).render(text);
+  assert.match(html, /<li class="td-note">/);
+  assert.match(html, /<img src="checklist.assets\/3f2a.webp"/);
+  assert.match(html, /data-td-act="note" data-td-line="16"/);
+
+  const fresh = clearRound(text, LABELS);
+  assert.equal(fresh, DOC.replace('- [x] **1.1.1.2**', '- [ ] **1.1.1.2**'));
+  assert.equal(archiveFolderName('ACT.E2ETEST', '2026-11-05', n => n === 'ACT.E2ETEST-2026-11-05'), 'ACT.E2ETEST-2026-11-05-2');
+});

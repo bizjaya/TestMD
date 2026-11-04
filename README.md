@@ -6,11 +6,13 @@ checklist, and anyone (or any tool) can read them as plain text.
 
 ## What you get
 
-- **TestMD: Run Checklist** (the ☑ button at the top right of a Markdown file's tab, or of its preview's tab) opens the
+- **TestMD: Run Checklist** (the square-with-a-tick button at the top right of a Markdown file's tab, or of its preview's tab) opens the
   checklist beside the editor:
   - a **tick** for each step you do,
   - **Yes / No** for each thing you check. **No** asks what went wrong, then writes it under the check with the date and
     your name;
+  - a **Note** on any step or check (it shows when you point at the item): text, and pictures pasted with Ctrl+V or
+    dropped in. The No box takes pictures too. Use them for the issue you hit, or as proof that something works;
   - a count in the corner: Yes, No, still to check, steps ticked, and an **Auto / Light / Dark** switch for the whole
     panel, menu included;
   - a floating menu (if the checklist has one) you can widen or narrow by dragging its edge; double-click the edge to
@@ -22,6 +24,8 @@ checklist, and anyone (or any tool) can read them as plain text.
 - **The checklist look** in VS Code's own preview too: status pills, highlighted pass conditions, warnings, struck-through
   done headings, an optional floating table of contents, and each item's answer shown as a badge.
 - **TestMD: New Checklist** writes a starter checklist from the template.
+- **TestMD: Archive Round** (also **Archive round** in the panel) copies the checklist and its pictures to
+  `archive/<name>-<date>/` beside it, then clears every tick, answer, note and picture, ready for the next round.
 
 ## How a checklist is written
 
@@ -54,6 +58,18 @@ After a run:
 - `[x]` is Yes (or a step done). An empty box with a `❌ No` line under it is No. An empty box alone is not checked yet.
 - Answering Yes later ticks the box and strikes the old reason through (`~~❌ No …~~`), so the history stays visible.
 - Done: `### ~~1.1 Sign in with email~~ <span class="pill success">Done</span>`.
+
+### Notes and pictures
+
+```markdown
+- [x] **1.1.2.2** <mark>Your name shows.</mark>
+  - 📝 **Note** · 2026-11-05 · Ann — top right, as expected.
+    ![](checklist.assets/3f2a9c1e-5b7d-4e0a-9c1b-2d8e6f4a7b90.webp)
+```
+
+A pasted picture is shrunk to at most 1,600 px on its longest side, saved as WebP in a folder named after the
+checklist (`checklist.assets/`), and linked from the line under the item. Nothing is embedded in the `.md`, so the file
+stays small and git shows each picture as its own file.
 
 ### Pills, highlights and the menu
 
