@@ -11,7 +11,10 @@ checklist, and anyone (or any tool) can read them as plain text.
   - a **tick** for each step you do,
   - **Yes / No** for each thing you check. **No** asks what went wrong, then writes it under the check with the date and
     your name;
-  - a count in the corner: Yes, No, still to check, steps ticked;
+  - a count in the corner: Yes, No, still to check, steps ticked, and an **Auto / Light / Dark** switch for the whole
+    panel, menu included;
+  - a floating menu (if the checklist has one) you can widen or narrow by dragging its edge; double-click the edge to
+    reset it;
   - **Mark test done** on a heading once every check under it is Yes: the heading is struck through and gets a Done
     pill, and links to it (in a menu, a results table) follow the new anchor.
 - **Find (Ctrl+F)** in the panel and in VS Code's own Markdown preview: every match highlighted, `3 of 17`, the current
@@ -73,9 +76,7 @@ Pill colours: `success`, `warning`, `danger`, `info`, `muted`. The menu has no b
 | `testmd.userName` | *(empty)* | The name on a No. Empty: your git `user.name`, else your login name. |
 | `testmd.saveAfterEachAnswer` | `true` | Save the file after every answer. |
 | `testmd.stepLabels` | `["Do", "Steps"]` | The words that make a list a list of steps (a tick, not Yes / No). |
-
-The panel also loads the stylesheets in your `markdown.styles` setting, so a checklist looks the same as in VS Code's
-preview.
+| `testmd.panelTheme` | `auto` | The panel's colours: `auto` follows the editor, `light` or `dark` always. The switch in the panel sets it. |
 
 ## Good to know
 

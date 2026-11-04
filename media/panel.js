@@ -5,9 +5,51 @@
   const root = document.getElementById('td-root');
   const bar = document.getElementById('td-bar');
   let openForm = null; // { line, text } — a No being written survives a redraw
+  let themeSetting = 'auto'; // auto | light | dark
+
+  // ── Theme: Auto follows the editor; Light and Dark force the whole panel, menu included ──────────────────────
+  function editorIsDark() {
+    const c = document.body.classList;
+    return c.contains('vscode-dark') || (c.contains('vscode-high-contrast') && !c.contains('vscode-high-contrast-light'));
+  }
+  function applyTheme() {
+    document.documentElement.dataset.tmdTheme = themeSetting === 'auto' ? (editorIsDark() ? 'dark' : 'light') : themeSetting;
+    bar.querySelectorAll('.tmd-theme button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.theme === themeSetting)));
+  }
+  new MutationObserver(applyTheme).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
+  // ── The splitter between the menu and the page ───────────────────────────────────────────────────────────────
+  const TOC_DEFAULT = 248;
+  const split = document.createElement('div');
+  split.id = 'tmd-split';
+  split.title = 'Drag to resize the menu · double-click to reset';
+  split.hidden = true;
+  document.body.appendChild(split);
+  function setTocWidth(px) {
+    const w = Math.round(Math.max(160, Math.min(px, window.innerWidth * 0.6)));
+    document.documentElement.style.setProperty('--tmd-toc-w', `${w}px`);
+    return w;
+  }
+  split.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    split.setPointerCapture(e.pointerId);
+    split.classList.add('tmd-dragging');
+    document.body.classList.add('tmd-resizing');
+  });
+  split.addEventListener('pointermove', e => { if (split.hasPointerCapture(e.pointerId)) setTocWidth(e.clientX); });
+  split.addEventListener('pointerup', e => {
+    if (!split.hasPointerCapture(e.pointerId)) return;
+    split.releasePointerCapture(e.pointerId);
+    split.classList.remove('tmd-dragging');
+    document.body.classList.remove('tmd-resizing');
+    vscode.postMessage({ type: 'tocWidth', value: setTocWidth(e.clientX) });
+  });
+  split.addEventListener('dblclick', () => vscode.postMessage({ type: 'tocWidth', value: setTocWidth(TOC_DEFAULT) }));
 
   function render(msg) {
     const y = window.scrollY;
+    if (msg.theme) themeSetting = msg.theme;
+    if (msg.tocWidth) setTocWidth(msg.tocWidth);
     if (openForm) openForm.text = root.querySelector('.td-form textarea')?.value ?? openForm.text;
     root.innerHTML = msg.html;
     for (const line of msg.doneable) {
@@ -21,7 +63,9 @@
       h.appendChild(b);
     }
     if (openForm) showForm(openForm.line, openForm.text);
+    split.hidden = !root.querySelector('.doc-toc');
     drawBar(msg.stats);
+    applyTheme();
     window.scrollTo(0, y);
   }
 
@@ -30,7 +74,10 @@
     const parts = [];
     if (checks) parts.push(`<b>${s.yes}</b> Yes · <b class="td-bar-no">${s.no}</b> No · <b>${s.open}</b> to check`);
     if (s.steps) parts.push(`steps <b>${s.ticked}</b> of <b>${s.steps}</b>`);
-    bar.innerHTML = parts.join('<span class="td-bar-sep"></span>') || 'No checklist items in this file';
+    const themes = ['auto', 'light', 'dark'].map(v =>
+      `<button data-theme="${v}" title="${v === 'auto' ? 'Follow the editor' : `Always ${v}`}">${v[0].toUpperCase() + v.slice(1)}</button>`).join('');
+    bar.innerHTML = `<span>${parts.join('<span class="td-bar-sep"></span>') || 'No checklist items in this file'}</span>` +
+      `<span class="tmd-theme" role="group" aria-label="Theme">${themes}</span>`;
     bar.classList.toggle('td-bar-bad', s.no > 0);
   }
 
@@ -77,6 +124,13 @@
       vscode.postMessage({ type: 'answer', action: act.dataset.tdAct, line });
       return;
     }
+    const theme = t.closest('.tmd-theme button');
+    if (theme) {
+      themeSetting = theme.dataset.theme;
+      applyTheme();
+      vscode.postMessage({ type: 'theme', value: themeSetting });
+      return;
+    }
     const done = t.closest('[data-td-markdone]');
     if (done) { e.preventDefault(); vscode.postMessage({ type: 'markDone', line: Number(done.dataset.tdMarkdone) }); return; }
     if (t.closest('.td-save')) { e.preventDefault(); saveNo(); return; }
@@ -94,6 +148,9 @@
     }
   });
 
-  window.addEventListener('message', e => { if (e.data?.type === 'render') render(e.data); });
+  window.addEventListener('message', e => {
+    if (e.data?.type === 'render') render(e.data);
+    if (e.data?.type === 'theme') { themeSetting = e.data.theme; applyTheme(); }
+  });
   vscode.postMessage({ type: 'ready' });
 })();
