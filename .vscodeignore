@@ -1,0 +1,11 @@
+.github/
+node_modules/
+out/
+src/
+test/
+**/*.map
+**/*.ts
+tsconfig.json
+esbuild.mjs
+.gitignore
+*.vsix

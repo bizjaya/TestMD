@@ -1,0 +1,135 @@
+{
+  "name": "testmd",
+  "displayName": "TestMD",
+  "description": "Run Markdown checklists in VS Code: tick each step, answer Yes or No to each check, and write why it failed right under it, all saved in the .md.",
+  "version": "0.1.0",
+  "publisher": "bizjaya",
+  "license": "MIT",
+  "author": "BizJaya TechLab S/B",
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bizjaya/TestMD"
+  },
+  "bugs": {
+    "url": "https://github.com/bizjaya/TestMD/issues"
+  },
+  "homepage": "https://github.com/bizjaya/TestMD#readme",
+  "keywords": [
+    "markdown",
+    "checklist",
+    "test",
+    "acceptance",
+    "qa",
+    "runbook",
+    "preview",
+    "find"
+  ],
+  "categories": [
+    "Other",
+    "Testing"
+  ],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguage:markdown"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "testmd.runChecklist",
+        "title": "Run Checklist",
+        "category": "TestMD",
+        "icon": {
+          "light": "media/run-light.svg",
+          "dark": "media/run-dark.svg"
+        }
+      },
+      {
+        "command": "testmd.newChecklist",
+        "title": "New Checklist",
+        "category": "TestMD"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "testmd.runChecklist",
+          "when": "resourceLangId == markdown",
+          "group": "navigation"
+        },
+        {
+          "command": "testmd.runChecklist",
+          "when": "activeWebviewPanelId == 'markdown.preview'",
+          "group": "navigation"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "testmd.runChecklist",
+          "when": "resourceLangId == markdown",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "TestMD",
+      "properties": {
+        "testmd.userName": {
+          "type": "string",
+          "default": "",
+          "description": "The name written on a No (\"❌ No · date · name — reason\"). Empty: your git user.name, else your login name.",
+          "scope": "resource"
+        },
+        "testmd.saveAfterEachAnswer": {
+          "type": "boolean",
+          "default": true,
+          "description": "Save the .md after every tick, Yes or No.",
+          "scope": "resource"
+        },
+        "testmd.stepLabels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "Do",
+            "Steps"
+          ],
+          "description": "A list under a line ending in one of these words (for example \"**2.1 · Do**\") holds steps: a plain tick. Every other checkbox is a check: Yes or No.",
+          "scope": "resource"
+        }
+      }
+    },
+    "markdown.markdownItPlugins": true,
+    "markdown.previewScripts": [
+      "./media/find.js",
+      "./media/preview.js"
+    ],
+    "markdown.previewStyles": [
+      "./media/checklist.css",
+      "./media/find.css"
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "node esbuild.mjs --test && node --test out/test/*.test.mjs",
+    "package": "vsce package",
+    "vscode:prepublish": "npm run typecheck && node esbuild.mjs --production"
+  },
+  "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.2.0",
+    "esbuild": "^0.24.0",
+    "github-slugger": "^2.0.0",
+    "markdown-it": "^14.1.0",
+    "ovsx": "^0.10.0",
+    "typescript": "^5.6.0"
+  }
+}

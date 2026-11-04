@@ -1,0 +1,27 @@
+/* TestMD panel — a plain Markdown page in the editor's colours (VS Code's own preview has its own). */
+body {
+  margin: 0 auto; max-width: 980px; padding: 24px 32px 96px;
+  font-family: var(--vscode-markdown-font-family, -apple-system, "Segoe UI", system-ui, sans-serif);
+  font-size: var(--vscode-markdown-font-size, 14px); line-height: var(--vscode-markdown-line-height, 1.6);
+  color: var(--vscode-editor-foreground); background: var(--vscode-editor-background);
+  word-wrap: break-word;
+}
+a { color: var(--vscode-textLink-foreground); text-decoration: none; }
+a:hover { text-decoration: underline; }
+h1, h2, h3, h4, h5, h6 { font-weight: 600; line-height: 1.25; margin: 1.4em 0 .6em; }
+h1 { font-size: 2em; padding-bottom: .3em; border-bottom: 1px solid var(--vscode-panel-border, rgba(128,128,128,.35)); }
+h2 { font-size: 1.5em; padding-bottom: .3em; border-bottom: 1px solid var(--vscode-panel-border, rgba(128,128,128,.35)); }
+h3 { font-size: 1.25em; } h4 { font-size: 1em; }
+p, ul, ol, table, pre, blockquote { margin: 0 0 1em; }
+ul, ol { padding-left: 2em; }
+code { font-family: var(--vscode-editor-font-family, monospace); font-size: .9em; padding: 1px 4px; border-radius: 4px;
+  background: var(--vscode-textCodeBlock-background, rgba(128,128,128,.15)); }
+pre { padding: 12px 14px; border-radius: 6px; overflow-x: auto; background: var(--vscode-textCodeBlock-background, rgba(128,128,128,.15)); }
+pre code { padding: 0; background: none; }
+blockquote { margin-left: 0; padding: 0 1em; color: var(--vscode-descriptionForeground);
+  border-left: 4px solid var(--vscode-textBlockQuote-border, rgba(128,128,128,.4)); }
+table { border-collapse: collapse; display: block; overflow-x: auto; }
+th, td { padding: 6px 12px; border: 1px solid var(--vscode-panel-border, rgba(128,128,128,.35)); }
+th { font-weight: 600; background: var(--vscode-textCodeBlock-background, rgba(128,128,128,.1)); }
+hr { border: 0; height: 1px; background: var(--vscode-panel-border, rgba(128,128,128,.35)); margin: 24px 0; }
+img { max-width: 100%; }

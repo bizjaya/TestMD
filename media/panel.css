@@ -1,0 +1,18 @@
+/* TestMD panel — the No box, Mark test done, and the count bar. */
+.td-form { margin: 6px 0 8px; padding: 8px; border-radius: 6px; border: 1px solid var(--td-no-border); background: var(--td-no-bg); }
+.td-form textarea { width: 100%; box-sizing: border-box; resize: vertical; font: inherit; padding: 6px 8px; border-radius: 5px;
+  border: 1px solid var(--td-no-border); color: var(--vscode-input-foreground); background: var(--vscode-input-background); }
+.td-form-row { display: flex; gap: 6px; margin-top: 6px; }
+.td-form button, .td-markdone { font: 600 12px/1 var(--vscode-font-family, system-ui, sans-serif); padding: 6px 12px;
+  border-radius: 5px; cursor: pointer; border: 1px solid var(--td-border); background: transparent; color: inherit; }
+.td-form .td-save { background: var(--td-no); border-color: var(--td-no); color: #fff; }
+.td-markdone { margin-left: 12px; vertical-align: middle; font-size: 11px; padding: 4px 10px;
+  background: var(--td-yes); border-color: var(--td-yes); color: #fff; }
+
+#td-bar { position: fixed; right: 18px; bottom: 16px; z-index: 60; padding: 8px 14px; border-radius: 20px;
+  font: 12px/1.2 var(--vscode-font-family, system-ui, sans-serif); color: var(--vscode-editor-foreground);
+  background: var(--vscode-editorWidget-background, #ffffff); border: 1px solid var(--td-border);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .18); }
+#td-bar.td-bar-bad { border-color: var(--td-no-border); }
+#td-bar .td-bar-no { color: var(--td-no); }
+#td-bar .td-bar-sep { display: inline-block; width: 1px; height: 12px; margin: 0 10px; vertical-align: -2px; background: var(--td-border); }

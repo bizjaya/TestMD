@@ -1,0 +1,96 @@
+/* TestMD — the checklist look. Loaded into VS Code's own Markdown preview and into the Run Checklist panel.
+ * Follows the editor's light or dark theme. */
+:root {
+  --td-accent: var(--vscode-textLink-foreground, #0969da);
+  --td-muted: var(--vscode-descriptionForeground, #6b7280);
+  --td-border: var(--vscode-panel-border, rgba(128, 128, 128, .35));
+  --td-menu-bg: var(--vscode-sideBar-background, #f7f9fc);
+  --td-hover: var(--vscode-list-hoverBackground, #e6f0ff);
+  --td-yes: #1a7f37; --td-yes-bg: #dafbe1; --td-yes-border: #4ac26b;
+  --td-no: #cf222e; --td-no-bg: #ffebe9; --td-no-border: #ff8182;
+  --td-mark: #fff3a3; --td-mark-ink: #1f2328;
+}
+body.vscode-dark, body.vscode-high-contrast {
+  --td-yes: #3fb950; --td-yes-bg: #12261e; --td-yes-border: #2ea043;
+  --td-no: #f85149; --td-no-bg: #2d1214; --td-no-border: #da3633;
+  --td-mark: #5c4a00; --td-mark-ink: #fff8c5;
+}
+
+/* ── Pills: who, where, status.  <span class="pill info">Tester</span> ─────────────────────────────────── */
+.pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 10.5px; font-weight: 600; line-height: 1.6;
+        text-transform: uppercase; letter-spacing: .04em; border: 1px solid; vertical-align: middle; }
+.pill.success { background: #f6ffed; color: #389e0d; border-color: #b7eb8f; }
+.pill.warning { background: #fff7e6; color: #d46b08; border-color: #ffd591; }
+.pill.danger  { background: #fff1f0; color: #cf1322; border-color: #ffa39e; }
+.pill.info    { background: #f0f9ff; color: #096dd9; border-color: #91d5ff; }
+.pill.muted   { background: #fafafa; color: #6b7280; border-color: #e5e7eb; }
+body.vscode-dark .pill.success { background: #12261e; color: #73d13d; border-color: #274916; }
+body.vscode-dark .pill.warning { background: #2b1d0e; color: #ffa940; border-color: #593815; }
+body.vscode-dark .pill.danger  { background: #2a1215; color: #ff7875; border-color: #58181c; }
+body.vscode-dark .pill.info    { background: #111d2c; color: #69b1ff; border-color: #15395b; }
+body.vscode-dark .pill.muted   { background: #1f1f1f; color: #a3a3a3; border-color: #3a3a3a; }
+
+/* ── Highlights: <mark> = what must be true; <u> = a warning ───────────────────────────────────────────── */
+mark { background: var(--td-mark); color: var(--td-mark-ink); padding: 0 3px; border-radius: 3px; }
+u { text-decoration-color: var(--td-no); text-decoration-thickness: 2px; text-underline-offset: 2px; }
+
+/* ── Done: a struck heading with the Done pill;  ### ~~2.1 Title~~ <span class="pill success">Done</span> ── */
+h1 > s, h2 > s, h3 > s, h4 > s, h5 > s, h6 > s, h1 > del, h2 > del, h3 > del, h4 > del, h5 > del, h6 > del {
+  color: var(--td-muted); text-decoration-thickness: 2px; }
+h1 > .pill, h2 > .pill, h3 > .pill, h4 > .pill, h5 > .pill, h6 > .pill { margin-left: 6px; }
+
+/* ── The floating menu: <nav class="doc-toc"> … </nav> (no blank lines inside) ─────────────────────────── */
+.doc-toc { position: fixed; top: 0; left: 0; bottom: 0; width: 248px; box-sizing: border-box; overflow-y: auto;
+  padding: 14px 12px 28px; background: var(--td-menu-bg); border-right: 1px solid var(--td-border);
+  font-size: 12.5px; line-height: 1.3; z-index: 50; }
+.doc-toc .doc-toc-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+  padding: 2px 8px 10px; margin-bottom: 6px; border-bottom: 1px solid var(--td-border); }
+.doc-toc .doc-toc-group { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--td-muted); margin: 13px 8px 3px; }
+.doc-toc a { display: block; padding: 5px 10px; margin: 1px 0; border-radius: 6px; color: var(--td-accent);
+  text-decoration: none; overflow-wrap: anywhere; border-left: 2px solid transparent; }
+.doc-toc a:hover { background: var(--td-hover); border-left-color: var(--td-accent); }
+.doc-toc a.l2 { padding-left: 26px; font-size: 11.5px; border-left: 2px solid var(--td-border); }
+.doc-toc a.l3 { padding-left: 40px; font-size: 11px; border-left: 2px solid var(--td-border); }
+.doc-toc .pill { font-size: 9px; padding: 0 5px; margin-left: 4px; }
+.doc-toc a:has(> .pill.success) { color: var(--td-muted); text-decoration: line-through; }
+body:has(.doc-toc) { margin-left: 248px !important; max-width: none !important; padding-inline: clamp(20px, 2.5vw, 44px) !important; }
+@media (max-width: 880px) {
+  .doc-toc { position: static; width: auto; border-right: none; border-bottom: 1px solid var(--td-border); margin-bottom: 18px; }
+  body:has(.doc-toc) { margin-left: auto !important; }
+}
+
+/* ── Checklist items ─────────────────────────────────────────────────────────────────────────────────── */
+ul.td-list, li.td-item { list-style: none; }
+ul.td-list { padding-left: 4px; }
+li.td-item { position: relative; margin: 4px 0; }
+.td-ctl { display: inline-flex; align-items: center; gap: 4px; margin-right: 8px; vertical-align: -3px; }
+.td-ctl button { font: 600 11px/1 var(--vscode-font-family, system-ui, sans-serif); cursor: pointer; border-radius: 5px;
+  border: 1px solid var(--td-border); background: transparent; color: var(--td-muted); padding: 3px 8px; }
+.td-ctl button:hover { border-color: var(--td-accent); color: var(--td-accent); }
+.td-ctl .td-tick { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; padding: 0; font-size: 12px; }
+.td-ctl .td-tick.td-on { background: var(--td-yes); border-color: var(--td-yes); color: #fff; }
+.td-ctl .td-yes.td-on { background: var(--td-yes); border-color: var(--td-yes); color: #fff; }
+.td-ctl .td-no.td-on { background: var(--td-no); border-color: var(--td-no); color: #fff; }
+/* VS Code's own preview shows the answer only */
+.td-badge { display: inline-block; min-width: 18px; margin-right: 8px; padding: 1px 6px; border-radius: 5px; font: 600 11px/1.4 var(--vscode-font-family, system-ui, sans-serif);
+  text-align: center; border: 1px solid var(--td-border); color: var(--td-muted); vertical-align: 1px; }
+.td-badge.td-yes { background: var(--td-yes); border-color: var(--td-yes); color: #fff; }
+.td-badge.td-no { background: var(--td-no); border-color: var(--td-no); color: #fff; }
+li.td-step.td-yes > p, li.td-step.td-yes { color: var(--td-muted); }
+li.td-check.td-no { border-left: 3px solid var(--td-no); padding-left: 8px; margin-left: -11px; }
+li.td-check.td-yes mark { background: var(--td-yes-bg); }
+
+/* The reason under a No, and older reasons (struck) */
+li.td-reason { list-style: none; color: var(--td-no); background: var(--td-no-bg); border: 1px solid var(--td-no-border);
+  border-radius: 6px; padding: 4px 10px; margin: 6px 0; }
+li.td-reason-old { color: var(--td-muted); background: transparent; border-style: dashed; border-color: var(--td-border); }
+
+/* VS Code's own preview: the read-only note (media/preview.js) */
+#tmd-note { position: fixed; right: 18px; bottom: 16px; z-index: 60; max-width: 420px; padding: 8px 14px; border-radius: 10px;
+  font: 12.5px/1.4 var(--vscode-font-family, system-ui, sans-serif); color: #1f2328; background: #fff8c5;
+  border: 1px solid #d4a72c; box-shadow: 0 4px 14px rgba(0, 0, 0, .18); }
+#tmd-note[hidden] { display: none; }
+#tmd-note .tmd-key { display: inline-flex; vertical-align: -3px; padding: 1px 3px; border-radius: 4px; background: #ffffff;
+  border: 1px solid #d4a72c; color: #424242; }
+.td-badge { cursor: help; }
