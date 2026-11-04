@@ -8,11 +8,14 @@ export interface Item { line: number; end: number; kind: ItemKind; state: ItemSt
 export interface Section { line: number; level: number; title: string; done: boolean; items: Item[]; }
 export interface Checklist { items: Item[]; sections: Section[]; }
 
-export type Action = 'yes' | 'no' | 'clear' | 'tick' | 'untick';
-export interface Answer { action: Action; line: number; reason?: string; who: string; date: string; }
+export type Action = 'yes' | 'no' | 'clear' | 'tick' | 'untick' | 'note';
+/** One answer. `reason` is the No's reason or the note's text; `images` are paths relative to the .md. */
+export interface Answer { action: Action; line: number; reason?: string; images?: string[]; who: string; date: string; }
 
 const BOX_LINE = /^(\s*(?:[-*+]|\d+[.)])\s+)\[( |x|X)\]/;
 const REASON_LINE = /^(\s*[-*+]\s+)(❌.*)$/;
+/** A reason (❌) or a note (📝) under an item, struck or not: the lines a new round clears. */
+const ADDED_LINE = /^(\s*)[-*+]\s+(?:~~)?(?:❌|📝)/;
 const DONE_PILL = '<span class="pill success">Done</span>';
 const plainMd = new MarkdownIt({ html: true });
 
@@ -69,6 +72,13 @@ function strikeReasons(lines: string[], start: number, end: number): void {
   }
 }
 
+/** The lines of a reason or a note under an item: its first line, more text, then one picture per line. */
+function addedLines(indent: string, head: string, a: Answer): string[] {
+  const [first, ...rest] = (a.reason ?? '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  const pictures = (a.images ?? []).map(src => `${indent}  ![](${src.replace(/ /g, '%20')})`);
+  return [`${indent}- ${head} · ${a.date} · ${a.who}${first ? ` — ${first}` : ''}`, ...rest.map(r => `${indent}  ${r}`), ...pictures];
+}
+
 /** Apply one answer. Throws when the line is no longer a checklist item (the file changed under the panel). */
 export function applyAnswer(text: string, a: Answer, stepLabels: string[]): string {
   const eol = eolOf(text);
@@ -84,14 +94,15 @@ export function applyAnswer(text: string, a: Answer, stepLabels: string[]): stri
     case 'yes': setBox(true); strikeReasons(lines, item.line, item.end); break;
     case 'clear': setBox(false); strikeReasons(lines, item.line, item.end); break;
     case 'no': {
-      const reason = (a.reason ?? '').trim();
-      if (!reason) throw new Error('Say why it does not work.');
+      if (!(a.reason ?? '').trim()) throw new Error('Say why it does not work.');
       setBox(false);
       strikeReasons(lines, item.line, item.end);
-      const indent = ' '.repeat(m[1].length);
-      const [first, ...rest] = reason.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-      const add = [`${indent}- ❌ **No** · ${a.date} · ${a.who} — ${first}`, ...rest.map(r => `${indent}  ${r}`)];
-      lines.splice(lastContentLine(lines, item.line, item.end) + 1, 0, ...add);
+      lines.splice(lastContentLine(lines, item.line, item.end) + 1, 0, ...addedLines(' '.repeat(m[1].length), '❌ **No**', a));
+      break;
+    }
+    case 'note': {
+      if (!(a.reason ?? '').trim() && !a.images?.length) throw new Error('Write a note or paste a picture first.');
+      lines.splice(lastContentLine(lines, item.line, item.end) + 1, 0, ...addedLines(' '.repeat(m[1].length), '📝 **Note**', a));
       break;
     }
   }
@@ -133,4 +144,29 @@ export function stats(list: Checklist): Stats {
     if (it.state === 'yes') s.yes++; else if (it.state === 'no') s.no++; else s.open++;
   }
   return s;
+}
+
+/** A new round: every box empty, every reason and note (with its pictures) gone. Headings marked done stay. */
+export function clearRound(text: string, stepLabels: string[]): string {
+  const eol = eolOf(text);
+  const lines = text.split(/\r?\n/);
+  const drop = new Set<number>();
+  for (const it of readChecklist(text, stepLabels).items) {
+    lines[it.line] = lines[it.line].replace(BOX_LINE, '$1[ ]');
+    for (let i = it.line + 1; i < Math.min(it.end, lines.length); i++) {
+      const m = ADDED_LINE.exec(lines[i]);
+      if (!m) continue;
+      drop.add(i);
+      const indent = m[1].length;
+      for (let j = i + 1; j < lines.length && lines[j].trim() && lines[j].search(/\S/) > indent; j++) drop.add(j);
+    }
+  }
+  return lines.filter((_, i) => !drop.has(i)).join(eol);
+}
+
+/** The folder a finished round is archived to: <doc>-<date>, then -2, -3 … if that name is taken. */
+export function archiveFolderName(docBase: string, date: string, taken: (name: string) => boolean): string {
+  const base = `${docBase}-${date}`;
+  if (!taken(base)) return base;
+  for (let n = 2; ; n++) if (!taken(`${base}-${n}`)) return `${base}-${n}`;
 }

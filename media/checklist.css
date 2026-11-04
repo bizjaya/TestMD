@@ -106,3 +106,9 @@ li.td-reason-old { color: var(--tmd-muted); background: transparent; border-styl
 #tmd-note[hidden] { display: none; }
 #tmd-note .tmd-key { display: inline-flex; vertical-align: -3px; padding: 1px 3px; border-radius: 4px; background: #ffffff;
   border: 1px solid #d4a72c; color: #424242; }
+
+/* A note under an item (📝), and pictures in notes and reasons */
+li.td-note { list-style: none; color: var(--tmd-fg); background: var(--tmd-code-bg); border: 1px solid var(--tmd-border);
+  border-radius: 6px; padding: 4px 10px; margin: 6px 0; }
+li.td-reason img, li.td-note img { display: block; max-width: min(100%, 480px); max-height: 320px; margin: 6px 0;
+  border-radius: 5px; border: 1px solid var(--tmd-border); }

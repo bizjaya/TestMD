@@ -29,3 +29,29 @@
 #tmd-split[hidden] { display: none; }
 body.tmd-resizing, body.tmd-resizing * { cursor: col-resize !important; user-select: none !important; }
 @media (max-width: 880px) { #tmd-split { display: none; } }
+
+/* Notes and pictures */
+.td-notebtn { margin-left: 8px; font: 600 10.5px/1 var(--vscode-font-family, system-ui, sans-serif); padding: 2px 7px; border-radius: 5px;
+  border: 1px solid var(--tmd-border); background: transparent; color: var(--tmd-muted); cursor: pointer; opacity: 0; vertical-align: 1px; }
+li.td-item:hover > .td-notebtn, li.td-item:hover > p > .td-notebtn, .td-notebtn:focus { opacity: 1; }
+.td-notebtn:hover { border-color: var(--tmd-link); color: var(--tmd-link); }
+.td-form-note { border-color: var(--tmd-border); background: var(--tmd-code-bg); }
+.td-form-note textarea { border-color: var(--tmd-border); }
+.td-form-note .td-save { background: var(--tmd-link); border-color: var(--tmd-link); color: #fff; }
+.td-form.td-drop { outline: 2px dashed var(--tmd-link); outline-offset: 2px; }
+.td-form-hint { margin-left: auto; align-self: center; font-size: 11px; color: var(--tmd-muted); }
+.td-pics { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.td-pics:empty { display: none; }
+.td-pic { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 120px; height: 80px;
+  border-radius: 6px; border: 1px solid var(--tmd-border); background: var(--tmd-bg); overflow: hidden; font-size: 11px; color: var(--tmd-muted); }
+.td-pic img { max-width: 100%; max-height: 100%; }
+.td-pic-failed { border-color: var(--tmd-no); color: var(--tmd-no); }
+.td-pic-x { position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 0;
+  background: rgba(0, 0, 0, .6); color: #fff; font: 600 13px/20px system-ui, sans-serif; cursor: pointer; }
+#td-root li.td-reason img, #td-root li.td-note img { cursor: zoom-in; }
+#td-lightbox { position: fixed; inset: 0; z-index: 2147483646; display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, .78); cursor: zoom-out; padding: 24px; box-sizing: border-box; }
+#td-lightbox img { max-width: 100%; max-height: 100%; border-radius: 6px; box-shadow: 0 10px 40px rgba(0, 0, 0, .6); }
+#td-bar .tmd-archive { margin-left: 8px; font: 600 11px/1 var(--vscode-font-family, system-ui, sans-serif); padding: 5px 10px;
+  border-radius: 14px; border: 1px solid var(--tmd-border); background: transparent; color: var(--tmd-fg); cursor: pointer; }
+#td-bar .tmd-archive:hover { border-color: var(--tmd-link); color: var(--tmd-link); }

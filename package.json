@@ -48,6 +48,11 @@
         }
       },
       {
+        "command": "testmd.archiveRound",
+        "title": "Archive Round",
+        "category": "TestMD"
+      },
+      {
         "command": "testmd.newChecklist",
         "title": "New Checklist",
         "category": "TestMD"

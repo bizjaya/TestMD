@@ -2,12 +2,13 @@ import * as vscode from 'vscode';
 import type MarkdownIt from 'markdown-it';
 import { checklistPlugin } from './core/markdown';
 import { ChecklistPanel } from './panel';
+import { archiveRound } from './files';
 
 /** The file behind VS Code's own preview tab ("Preview x.md" or "[Preview] x.md"), which carries no URI of its own. */
 async function previewSource(): Promise<vscode.Uri | undefined> {
   const tab = vscode.window.tabGroups.activeTabGroup.activeTab;
   if (!(tab?.input instanceof vscode.TabInputWebview)) return undefined;
-  const name = /^(?:\[Preview\]|Preview)\s+(.+)$/.exec(tab.label)?.[1];
+  const name = /^(?:\[Preview\]|Preview|Checklist ·)\s+(.+)$/.exec(tab.label)?.[1];
   if (!name) return undefined;
   const same = (u: vscode.Uri) => u.path.split('/').pop() === name;
   const visible = vscode.window.visibleTextEditors.map(e => e.document.uri).find(same);
@@ -45,6 +46,14 @@ export function activate(context: vscode.ExtensionContext) {
       }
       ChecklistPanel.show(context, uri);
     }),
+    vscode.commands.registerCommand('testmd.archiveRound', async (arg?: unknown) => {
+      const uri = await targetUri(arg);
+      if (!uri || uri.scheme !== 'file') {
+        void vscode.window.showInformationMessage('TestMD: open the checklist to archive first.');
+        return;
+      }
+      await archiveRound(uri);
+    }),
     vscode.commands.registerCommand('testmd.newChecklist', async () => {
       const folder = vscode.workspace.workspaceFolders?.[0]?.uri;
       const target = await vscode.window.showSaveDialog({
@@ -71,3 +80,7 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {}
+
+// For an integration test run inside VS Code: the file and text operations, without the panel.
+export { applyTextChange, savePicture } from './files';
+export { applyAnswer, clearRound } from './core/model';

@@ -4,14 +4,19 @@ import * as path from 'path';
 import { createRenderer } from './core/markdown';
 import { applyAnswer, doneable, markDone, readChecklist, stats, Action } from './core/model';
 import { settings, userName, today } from './settings';
+import { applyTextChange, archiveRound, savePicture } from './files';
 
 interface FromWebview {
-  type: 'ready' | 'answer' | 'markDone' | 'open' | 'theme' | 'tocWidth';
+  type: 'ready' | 'answer' | 'markDone' | 'open' | 'theme' | 'tocWidth' | 'picture' | 'archive';
   action?: Action;
   line?: number;
   reason?: string;
+  images?: string[];
   href?: string;
   value?: string | number;
+  id?: string;
+  data?: string;
+  ext?: string;
 }
 
 const TOC_WIDTH_KEY = 'testmd.tocWidth';
@@ -68,7 +73,7 @@ export class ChecklistPanel {
     const links = css.map(u => `<link rel="stylesheet" href="${u}">`).join('\n');
     return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${w.cspSource} https: data:; style-src ${w.cspSource} 'unsafe-inline'; font-src ${w.cspSource}; script-src 'nonce-${nonce}';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${w.cspSource} https: data: blob:; style-src ${w.cspSource} 'unsafe-inline'; font-src ${w.cspSource}; script-src 'nonce-${nonce}';">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <base href="${base}">
 ${links}
@@ -102,38 +107,29 @@ ${links}
       if (m.type === 'tocWidth' && typeof m.value === 'number') {
         return void (await this.context.globalState.update(TOC_WIDTH_KEY, m.value));
       }
+      if (m.type === 'picture' && m.id && m.data && (m.ext === 'webp' || m.ext === 'png')) {
+        const saved = await savePicture(this.uri, m.data, m.ext);
+        await this.panel.webview.postMessage({ type: 'pictureSaved', id: m.id, path: saved.relative,
+          src: this.panel.webview.asWebviewUri(saved.uri).toString() });
+        return;
+      }
+      if (m.type === 'archive') return void (await archiveRound(this.uri));
       if (m.type === 'answer' && m.action && typeof m.line === 'number') {
         const who = await userName(this.uri);
-        await this.edit(text => applyAnswer(text, { action: m.action!, line: m.line!, reason: m.reason, who, date: today() },
+        const images = (m.images ?? []).filter(s => typeof s === 'string' && !/^[a-z]+:|^\/|\.\./i.test(s));
+        await this.edit(text => applyAnswer(text, { action: m.action!, line: m.line!, reason: m.reason, images, who, date: today() },
           settings(this.uri).stepLabels));
       }
       if (m.type === 'markDone' && typeof m.line === 'number') await this.edit(text => markDone(text, m.line!));
     } catch (err) {
+      if (m.type === 'picture' && m.id) void this.panel.webview.postMessage({ type: 'pictureFailed', id: m.id });
       void vscode.window.showWarningMessage(`TestMD: ${err instanceof Error ? err.message : String(err)}`);
       await this.render();
     }
   }
 
-  /** Replace only the lines that changed, so undo, the cursor and other edits in the file are left alone. */
-  private async edit(change: (text: string) => string): Promise<void> {
-    const doc = await vscode.workspace.openTextDocument(this.uri);
-    const before = doc.getText();
-    const after = change(before);
-    if (after === before) return;
-    const a = before.split(/\r?\n/), b = after.split(/\r?\n/);
-    let start = 0;
-    while (start < a.length && start < b.length && a[start] === b[start]) start++;
-    let endA = a.length - 1, endB = b.length - 1;
-    while (endA >= start && endB >= start && a[endA] === b[endB]) { endA--; endB--; }
-    const eol = doc.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n';
-    const range = endA >= start
-      ? new vscode.Range(start, 0, endA, a[endA].length)
-      : new vscode.Range(start, 0, start, 0);
-    const inserted = b.slice(start, endB + 1).join(eol) + (endA >= start ? '' : eol);
-    const we = new vscode.WorkspaceEdit();
-    we.replace(this.uri, range, inserted);
-    await vscode.workspace.applyEdit(we);
-    if (settings(this.uri).saveAfterEachAnswer) await doc.save();
+  private edit(change: (text: string) => string): Promise<void> {
+    return applyTextChange(this.uri, change, settings(this.uri).saveAfterEachAnswer);
   }
 
   private async open(href: string): Promise<void> {
