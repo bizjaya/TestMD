@@ -42,6 +42,10 @@ export class ChecklistPanel {
   private readonly disposables: vscode.Disposable[] = [];
   private timer: NodeJS.Timeout | undefined;
   private swept = false;
+  private rendering = false;
+  private again = false;
+  private stale = false;
+  private disposed = false;
 
   static show(context: vscode.ExtensionContext, uri: vscode.Uri): void {
     const open = ChecklistPanel.panels.get(uri.toString());
@@ -65,14 +69,18 @@ export class ChecklistPanel {
       if (e.affectsConfiguration('testmd.colors')) void panel.webview.postMessage({ type: 'colors', colors: panelColors() });
       if (e.affectsConfiguration('testmd.stepLabels')) void this.render();
     }, null, this.disposables);
+    // Typing in the .md redraws once a pause in the typing, not per key.
     vscode.workspace.onDidChangeTextDocument(e => {
       if (e.document.uri.toString() !== uri.toString()) return;
       clearTimeout(this.timer);
-      this.timer = setTimeout(() => void this.render(), 60);
+      this.timer = setTimeout(() => void this.render(), 250);
     }, null, this.disposables);
+    // A hidden panel keeps its page but does no work: a change while hidden is drawn when the tab shows again.
+    panel.onDidChangeViewState(e => { if (e.webviewPanel.visible && this.stale) void this.render(); }, null, this.disposables);
   }
 
   private dispose(): void {
+    this.disposed = true;
     ChecklistPanel.panels.delete(this.uri.toString());
     clearTimeout(this.timer);
     this.disposables.forEach(d => d.dispose());
@@ -98,17 +106,29 @@ ${panelBody()}
 </body></html>`;
   }
 
+  /** Send the checklist to the page. Skipped while the tab is hidden (drawn when it shows), and never two at once:
+   * a change during a render is drawn by one more render after it. */
   private async render(): Promise<void> {
     clearTimeout(this.timer);
-    const doc = await vscode.workspace.openTextDocument(this.uri);
-    const outline = buildOutline(doc.getText(), settings(this.uri).stepLabels);
-    const folder = vscode.workspace.getWorkspaceFolder(this.uri);
-    await this.panel.webview.postMessage({
-      type: 'render', outline, title: outline.title || path.basename(this.uri.fsPath),
-      file: folder ? path.relative(folder.uri.fsPath, this.uri.fsPath).split(path.sep).join('/') : path.basename(this.uri.fsPath),
-      theme: panelTheme(), colors: panelColors(), tocWidth: this.context.globalState.get<number>(TOC_WIDTH_KEY),
-      ui: this.context.globalState.get<object>(UI_KEY), who: await userName(this.uri), today: today(),
-    });
+    if (this.disposed) return;
+    if (!this.panel.visible) { this.stale = true; return; }
+    if (this.rendering) { this.again = true; return; }
+    this.rendering = true;
+    this.stale = false;
+    try {
+      const doc = await vscode.workspace.openTextDocument(this.uri);
+      const outline = buildOutline(doc.getText(), settings(this.uri).stepLabels);
+      const folder = vscode.workspace.getWorkspaceFolder(this.uri);
+      await this.panel.webview.postMessage({
+        type: 'render', outline, title: outline.title || path.basename(this.uri.fsPath),
+        file: folder ? path.relative(folder.uri.fsPath, this.uri.fsPath).split(path.sep).join('/') : path.basename(this.uri.fsPath),
+        theme: panelTheme(), colors: panelColors(), tocWidth: this.context.globalState.get<number>(TOC_WIDTH_KEY),
+        ui: this.context.globalState.get<object>(UI_KEY), who: await userName(this.uri), today: today(),
+      });
+    } finally {
+      this.rendering = false;
+      if (this.again && !this.disposed) { this.again = false; void this.render(); }
+    }
   }
 
   private async onMessage(m: FromWebview): Promise<void> {

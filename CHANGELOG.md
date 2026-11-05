@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.1 (2026-11-05)
+
+- Answering is about 100 times lighter on a long checklist: when the file changes, only the rows that changed are
+  drawn again, instead of the whole page. On a 2,500-row checklist that is about 3 ms instead of 300 ms an answer.
+- Scrolling does less: the crumbs and the contents highlight change only when you move into another section, and the
+  place kept for the next redraw is saved once scrolling stops.
+- A hidden Checklist tab does no work. A change made while it is hidden is drawn when the tab shows again.
+- Typing in the .md redraws the panel once you pause, not on every key.
+- The progress panel is drawn only while it is open, and dragging the colour picker restyles the page once a frame.
+- Marking a test done keeps your place. Picking a heading or a part in the contents puts it at the top of the page,
+  so the crumbs and the contents name it.
+
 ## 0.2.0 (2026-11-05)
 
 - The panel is laid out like a small website: a header with the checklist's title, where you are, Find and what is

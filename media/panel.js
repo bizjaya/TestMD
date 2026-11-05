@@ -42,9 +42,64 @@ const content = $('#content');
 const main = $('#main');
 const leaf = $('#leaf');
 
-function keepView() { vscode.setState({ folded: view.folded, open: view.open, scroll: view.scroll }); }
+function keepView() { clearTimeout(keepT); vscode.setState({ folded: view.folded, open: view.open, scroll: view.scroll }); }
+// Scrolling only moves the kept place: write it once the scrolling stops, not on every frame.
+let keepT = 0;
+function keepViewSoon() { clearTimeout(keepT); keepT = setTimeout(keepView, 400); }
 let uiTimer = 0;
 function saveUi() { clearTimeout(uiTimer); uiTimer = setTimeout(() => vscode.postMessage({ type: 'ui', value: ui }), 250); }
+/** Write HTML only when it changed, so a refresh leaves untouched parts of the page alone. */
+function setHtml(el, html) { if (el && el._h !== html) { el._h = html; el.innerHTML = html; } }
+
+// A render from the extension usually follows an answer and changes a row or two. Each row gets a shape (what it is
+// and where) and a signature (what it says, its line number aside): when every shape matches the page already drawn,
+// only the rows whose signature changed are drawn again.
+// A heading is known by its number when it has one: marking it done changes its id (the slug gains "-done"), not what it is.
+const shapeOf = r => r.k === 'h' ? `h|${r.num || r.id}|${r.level}` : r.k === 'b' ? `b|${r.num}|${r.kind}` : r.k === 'i' ? `i|${r.num}|${r.kind}` : 'p';
+const sigOf = r => JSON.stringify(r, (k, v) => (k === 'line' || k === 'sig' || k === 'shape') ? undefined : v);
+const partSig = p => JSON.stringify([p.id, p.num, p.title, p.done, p.intro, p.table, p.rows.length]);
+function stamp(outline) {
+  outline.parts.forEach(p => { p.sig = partSig(p); p.rows.forEach(r => { r.shape = shapeOf(r); r.sig = sigOf(r); }); });
+}
+const DATA = { h: ['id', 'title', 'done', 'pills', 'intro'], b: ['label'], i: ['html', 'state', 'notes'], p: ['html', 'outro'] };
+/** Patch the page in place from a new outline of the same shape. False when the shape differs. */
+function patch(outline) {
+  if (!parts.length || outline.parts.length !== parts.length) return false;
+  for (let i = 0; i < parts.length; i++) {
+    const a = parts[i], b = outline.parts[i];
+    if (a.sig !== b.sig || a.rows.length !== b.rows.length) return false;
+    for (let j = 0; j < a.rows.length; j++) if (a.rows[j].shape !== b.rows[j].shape || (!a.table && a.rows[j].sig !== b.rows[j].sig)) return false;
+  }
+  let headsChanged = false;
+  parts.forEach((p, i) => {
+    const np = outline.parts[i];
+    p.line = np.line;
+    p.rows.forEach((r, j) => {
+      const n = np.rows[j];
+      if (n.line !== undefined) r.line = n.line;
+      if (n.sig === r.sig) return;
+      r.sig = n.sig;
+      if (r.k === 'h' && n.id !== r.id && r.id in view.folded) { view.folded[n.id] = view.folded[r.id]; delete view.folded[r.id]; keepView(); }
+      const doneNow = r.k === 'h' && n.done && !r.done;
+      for (const k of DATA[r.k]) r[k] = n[k];
+      // A test marked done outside the panel (by hand, by git) folds like one marked here, unless you folded it yourself.
+      if (doneNow && view.folded[r.id] === undefined) r.folded = ui.foldDone;
+      if (r.k === 'i') { if (r.el) redrawItem(r); return; }
+      if (r.k === 'h') { r.plain = plain(r.title); headsChanged = true; }
+      if (r.el && r.el.tagName === 'TR') {
+        const t = document.createElement('tbody');
+        t.innerHTML = rowHtml(r);
+        const row = t.firstElementChild;
+        r.el.replaceWith(row); r.el = row;
+        if (r.k === 'h') r.ansEl = row.querySelector('[data-hans]');
+        if (r.k === 'b') r.ansEl = row.querySelector('[data-bans]');
+      }
+    });
+  });
+  if (headsChanged) { drawToc(); spyPart = spyHead = undefined; }
+  refresh();
+  return true;
+}
 
 // ── The model: parts -> rows; headings, blocks and items wired to each other ────────────────────────────────────────
 function build(outline) {
@@ -79,7 +134,8 @@ function build(outline) {
     p.items = p.rows.filter(r => r.k === 'i');
     p.heads = p.rows.filter(r => r.k === 'h');
   });
-  heads.forEach(h => { h.group = h.kids.length > 0 && !h.items.some(it => it.head === h); });
+  heads.forEach(h => { h.group = h.kids.length > 0 && !h.items.some(it => it.head === h); h.plain = plain(h.title); });
+  parts.forEach(p => { p.plain = plain(p.title || (doc && doc.title) || ''); });
   heads.forEach(h => { h.folded = view.folded[h.id] !== undefined ? view.folded[h.id] : (h.done && ui.foldDone); });
   items.forEach(it => { it.open = !!view.open[it.key]; it.form = forms[it.key] || null; });
 }
@@ -177,9 +233,15 @@ function drawAll() {
   $('#docTitle').title = doc.title;
   content.innerHTML = `<div class="docbar"><span class="hint">Collapse shows one row per test. Alt+click a test's arrow to fold or open every test of its level in that part.</span>${foldBar('all', 0, 'every test in every part')}</div>`
     + parts.map(partHtml).join('');
-  allRows.forEach(r => { r.el = content.querySelector(`tr[data-g="${r.gid}"]`) || (r.k === 'h' && r.id ? document.getElementById(r.id) : null); });
-  items.forEach(it => { it.nel = content.querySelector(`tr[data-n="${it.gid}"]`); });
-  parts.forEach(p => { p.el = content.querySelector(`section[data-p="${p.idx}"]`); });
+  // One pass over the page to find every row, instead of one search per row.
+  allRows.forEach(r => { r.el = null; });
+  content.querySelectorAll('tr[data-g]').forEach(tr => { allRows[+tr.dataset.g].el = tr; });
+  content.querySelectorAll('tr[data-n]').forEach(tr => { allRows[+tr.dataset.n].nel = tr; });
+  content.querySelectorAll('section[data-p]').forEach(s => { parts[+s.dataset.p].el = s; });
+  heads.forEach(h => { if (!h.el && h.id) h.el = document.getElementById(h.id); h.ansEl = h.el && h.el.querySelector('[data-hans]'); });
+  blocks.forEach(b => { b.ansEl = b.el && b.el.querySelector('[data-bans]'); });
+  parts.forEach(p => { p.meterEl = p.el.querySelector('[data-meter]'); });
+  spyPart = spyHead = undefined;
   drawToc();
   refresh();
 }
@@ -200,18 +262,18 @@ function headAns(h) {
   return `<span class="prog"><span>${t.answered} of ${t.total}${t.no ? ` · <span class="nos">${t.no} No</span>` : ''}</span><span class="bar"><i style="width:${pct(t.ticked + t.yes, t.total)}%"></i><i class="n" style="width:${pct(t.no, t.total)}%"></i></span></span>`;
 }
 function refresh() {
-  heads.forEach(h => { const c = content.querySelector(`[data-hans="${h.gid}"]`); if (c) c.innerHTML = headAns(h); });
+  heads.forEach(h => setHtml(h.ansEl, headAns(h)));
   blocks.forEach(b => {
-    const c = content.querySelector(`[data-bans="${b.gid}"]`); if (!c) return;
+    if (!b.ansEl) return;
     const t = tally(b.items);
-    c.textContent = b.kind === 'step' ? `${t.ticked} of ${t.steps} done` : `${t.yes} Yes${t.no ? ` · ${t.no} No` : ''} of ${t.checks}`;
+    setHtml(b.ansEl, b.kind === 'step' ? `${t.ticked} of ${t.steps} done` : `${t.yes} Yes${t.no ? ` · ${t.no} No` : ''} of ${t.checks}`);
   });
   parts.forEach(p => {
-    const m = content.querySelector(`[data-meter="${p.idx}"]`); if (!m) return;
+    if (!p.meterEl) return;
     const t = tally(p.items);
     const tests = p.heads.filter(isTest);
     const done = tests.filter(h => h.done).length;
-    m.innerHTML = `<div>${tests.length ? `<b>${done}</b> of ${tests.length} tests done · ` : ''}<b>${t.total - t.answered}</b> left</div><div class="bar"><i style="width:${pct(t.ticked + t.yes, t.total)}%"></i><i class="n" style="width:${pct(t.no, t.total)}%"></i></div>`;
+    setHtml(p.meterEl, `<div>${tests.length ? `<b>${done}</b> of ${tests.length} tests done · ` : ''}<b>${t.total - t.answered}</b> left</div><div class="bar"><i style="width:${pct(t.ticked + t.yes, t.total)}%"></i><i class="n" style="width:${pct(t.no, t.total)}%"></i></div>`);
     p.el.classList.toggle('done', tests.length > 0 && done === tests.length);
   });
   refreshToc(); refreshChip(); drawLeaf(); drawPanel(); applyVisibility();
@@ -221,8 +283,8 @@ function refreshChip() {
   const left = t.todo + (t.steps - t.ticked);
   const share = Math.round(t.answered / Math.max(1, t.total) * 100);
   const r = 9, c = 2 * Math.PI * r;
-  $('#chip').innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="${r}" fill="none" stroke="var(--line)" stroke-width="3.5"/><circle cx="12" cy="12" r="${r}" fill="none" stroke="var(--yes-fill)" stroke-width="3.5" stroke-dasharray="${c * share / 100} ${c}" transform="rotate(-90 12 12)" stroke-linecap="round"/></svg>`
-    + `<span><b>${left}</b> <span class="cl">left</span>${t.no ? ` · <span class="no">${t.no} No</span>` : ''}</span>`;
+  setHtml($('#chip'), `<svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="${r}" fill="none" stroke="var(--line)" stroke-width="3.5"/><circle cx="12" cy="12" r="${r}" fill="none" stroke="var(--yes-fill)" stroke-width="3.5" stroke-dasharray="${c * share / 100} ${c}" transform="rotate(-90 12 12)" stroke-linecap="round"/></svg>`
+    + `<span><b>${left}</b> <span class="cl">left</span>${t.no ? ` · <span class="no">${t.no} No</span>` : ''}</span>`);
   $('#chip').title = `${share}% answered: ${t.ticked} of ${t.steps} steps, ${t.yes + t.no} of ${t.checks} checks. Open the progress panel.`;
 }
 
@@ -230,29 +292,36 @@ function refreshChip() {
 const tocF = { q: '', show: 'all' };
 function drawToc() {
   $('#tocTree').innerHTML = parts.map(p => {
-    const kids = p.heads.filter(h => h.rel <= 2).map(h => `<a class="th lv${h.rel}${h.done ? ' done' : ''}" href="#${esc(h.id)}" data-h="${h.gid}"><span class="hn">${esc(h.num)}</span><span class="ht">${esc(plain(h.title))}</span>${h.done ? '<span class="pill success">Done</span>' : ''}<span data-tdot></span></a>`).join('');
+    const kids = p.heads.filter(h => h.rel <= 2).map(h => `<a class="th lv${h.rel}${h.done ? ' done' : ''}" href="#${esc(h.id)}" data-h="${h.gid}"><span class="hn">${esc(h.num)}</span><span class="ht">${esc(h.plain)}</span>${h.done ? '<span class="pill success">Done</span>' : ''}<span data-tdot></span></a>`).join('');
     const open = ui.tocOpen[p.id || p.idx] ? ' open' : '';
-    const title = esc(plain(p.title || doc.title));
-    return `<div class="tp${open}" data-p="${p.idx}"><button class="tp-row" type="button" data-act="tpart">${kids ? `<span class="cv">${I.chev}</span>` : '<span class="cv" style="width:14px"></span>'}<span class="tn">${esc(p.num)}</span><span class="tt">${title}</span><span class="tc" data-tc></span></button>${kids ? `<div class="tp-kids">${kids}</div>` : ''}</div>`;
+    return `<div class="tp${open}" data-p="${p.idx}"><button class="tp-row" type="button" data-act="tpart">${kids ? `<span class="cv">${I.chev}</span>` : '<span class="cv" style="width:14px"></span>'}<span class="tn">${esc(p.num)}</span><span class="tt">${esc(p.plain)}</span><span class="tc" data-tc></span></button>${kids ? `<div class="tp-kids">${kids}</div>` : ''}</div>`;
   }).join('');
+  parts.forEach(p => { p.tocEl = null; p.tocKids = []; });
+  heads.forEach(h => { h.tocEl = null; });
+  $$('#tocTree .tp').forEach(el => {
+    const p = parts[+el.dataset.p];
+    p.tocEl = el; p.tocTt = el.querySelector('.tp-row .tt'); p.tocTc = el.querySelector('[data-tc]'); p.tocTt._h = esc(p.plain);
+  });
+  $$('#tocTree .th').forEach(a => {
+    const h = allRows[+a.dataset.h];
+    h.tocEl = a; h.tocHt = a.querySelector('.ht'); h.tocDot = a.querySelector('[data-tdot]'); h.tocHt._h = esc(h.plain);
+    h.part.tocKids.push(h);
+  });
+  tocActive = { p: null, h: null };
 }
 const headOpen = h => (isTest(h) ? !h.done : false) || h.items.some(it => it.state === 'none');
 const headNo = h => h.items.some(it => it.state === 'no');
 function refreshToc() {
-  $$('#tocTree .tp').forEach(el => {
-    const p = parts[+el.dataset.p];
-    const c = el.querySelector('[data-tc]');
-    if (!p.table) { c.textContent = ''; return; }
+  parts.forEach(p => {
+    if (!p.tocTc) return;
+    if (!p.table) { setHtml(p.tocTc, ''); return; }
     const tests = p.heads.filter(isTest);
     const done = tests.filter(h => h.done).length;
     const no = tally(p.items).no;
-    c.className = 'tc' + (tests.length && done === tests.length ? ' all' : '');
-    c.innerHTML = `${no ? '<span class="dot" title="Has a No"></span> ' : ''}${tests.length ? `${done}/${tests.length}` : ''}`;
+    p.tocTc.classList.toggle('all', !!tests.length && done === tests.length);
+    setHtml(p.tocTc, `${no ? '<span class="dot" title="Has a No"></span> ' : ''}${tests.length ? `${done}/${tests.length}` : ''}`);
   });
-  $$('#tocTree .th').forEach(a => {
-    const h = allRows[+a.dataset.h];
-    const d = a.querySelector('[data-tdot]'); if (d) d.innerHTML = headNo(h) ? '<span class="dot"></span>' : '';
-  });
+  heads.forEach(h => { if (h.tocDot) setHtml(h.tocDot, headNo(h) ? '<span class="dot"></span>' : ''); });
   applyTocFilter();
 }
 function markText(text, q) {
@@ -264,31 +333,26 @@ function applyTocFilter() {
   const q = tocF.q.trim().toLowerCase();
   const on = !!q || tocF.show !== 'all';
   let count = 0;
-  $$('#tocTree .tp').forEach(el => {
-    const p = parts[+el.dataset.p];
-    const ptext = plain(p.title || doc.title);
+  parts.forEach(p => {
+    const el = p.tocEl; if (!el) return;
+    const ptext = p.plain;
     const partHit = !q || (p.num + ' ' + ptext).toLowerCase().includes(q);
     let kids = 0;
-    el.querySelectorAll('.th').forEach(a => {
-      const h = allRows[+a.dataset.h];
-      const ht = a.querySelector('.ht');
-      if (ht.dataset.html === undefined) ht.dataset.html = ht.innerHTML;
-      const htext = plain(h.title);
+    p.tocKids.forEach(h => {
+      const htext = h.plain;
       const hitQ = !q || partHit || (h.num + ' ' + htext).toLowerCase().includes(q);
       const hitS = tocF.show === 'all' || (tocF.show === 'open' ? headOpen(h) : headNo(h));
       const vis = hitQ && hitS;
-      a.classList.toggle('hide', !vis);
+      h.tocEl.classList.toggle('hide', !vis);
       if (vis) kids++;
-      ht.innerHTML = q && vis && htext.toLowerCase().includes(q) ? markText(htext, q) : ht.dataset.html;
+      setHtml(h.tocHt, q && vis && htext.toLowerCase().includes(q) ? markText(htext, q) : esc(htext));
     });
-    const hasKids = !!el.querySelector('.th');
+    const hasKids = p.tocKids.length > 0;
     const partS = tocF.show === 'all' || (tocF.show === 'open' ? p.heads.some(headOpen) : p.heads.some(headNo));
     const vis = !on || kids > 0 || (!hasKids && partHit && partS);
     el.classList.toggle('hide', !vis);
     el.classList.toggle('fopen', on && kids > 0);
-    const tt = el.querySelector('.tp-row .tt');
-    if (tt.dataset.html === undefined) tt.dataset.html = tt.innerHTML;
-    tt.innerHTML = q && ptext.toLowerCase().includes(q) ? markText(ptext, q) : tt.dataset.html;
+    setHtml(p.tocTt, q && ptext.toLowerCase().includes(q) ? markText(ptext, q) : esc(ptext));
     if (vis) count += hasKids ? kids : 1;
   });
   $('#tocQc').textContent = on ? String(count) : '';
@@ -312,11 +376,11 @@ $('#tocTree').addEventListener('click', e => {
     const el = row.parentElement, p = parts[+el.dataset.p];
     const was = el.classList.contains('open');
     el.classList.toggle('open', !was); ui.tocOpen[p.id || p.idx] = !was;
-    if (!was || !el.querySelector('.tp-kids')) goTo(p.el);
+    if (!was || !el.querySelector('.tp-kids')) goTo(p.el, false, true);
     saveUi(); return;
   }
   const a = e.target.closest('a.th');
-  if (a) { e.preventDefault(); const h = allRows[+a.dataset.h]; if (h.folded) { h.folded = false; view.folded[h.id] = false; applyVisibility(); keepView(); } goTo(h.el, false); }
+  if (a) { e.preventDefault(); const h = allRows[+a.dataset.h]; if (h.folded) { h.folded = false; view.folded[h.id] = false; applyVisibility(); keepView(); } goTo(h.el, false, true); }
 });
 $('#tocFold').addEventListener('click', () => { ui.tocOpen = {}; $$('#tocTree .tp').forEach(el => el.classList.remove('open')); saveUi(); });
 
@@ -354,7 +418,9 @@ function foldPart(p, collapse) {
 }
 
 // ── Answering ────────────────────────────────────────────────────────────────────────────────────────────────────
-const post = (action, it, extra) => vscode.postMessage({ type: 'answer', action, line: it.line, ...(extra || {}) });
+// A row answered here changes before the file does, so it no longer matches what the extension last sent: forget its
+// signature, and the next render draws it from the file whatever the file says, even if the write did not happen.
+const post = (action, it, extra) => { it.sig = null; vscode.postMessage({ type: 'answer', action, line: it.line, ...(extra || {}) }); };
 function strikeReasons(it) { it.notes.forEach(n => { if (n.type === 'no') n.type = 'old'; }); }
 function act(it, what) {
   if (what === 'tick') { const on = it.state === 'yes'; post(on ? 'untick' : 'tick', it); it.state = on ? 'none' : 'yes'; }
@@ -430,14 +496,14 @@ content.addEventListener('click', e => {
     const collapse = fb.dataset.fold === 'collapse';
     (fb.dataset.scope === 'all' ? parts : [parts[+fb.dataset.id]]).forEach(p => foldPart(p, collapse));
     applyVisibility(); keepView();
-    if (fb.dataset.scope === 'p') goTo(parts[+fb.dataset.id].el);
+    if (fb.dataset.scope === 'p') goTo(parts[+fb.dataset.id].el, false, true);
     return;
   }
   const link = e.target.closest('a[href]');
   if (link && !e.target.closest('[data-act="fold"] button')) {
     e.preventDefault();
     const href = link.getAttribute('href');
-    if (href.startsWith('#')) { const el = document.getElementById(decodeURIComponent(href.slice(1))); if (el) goTo(el, false); }
+    if (href.startsWith('#')) { const el = document.getElementById(decodeURIComponent(href.slice(1))); if (el) goTo(el, false, true); }
     else vscode.postMessage({ type: 'open', href });
     return;
   }
@@ -458,7 +524,7 @@ content.addEventListener('click', e => {
   if (a === 'markdone') {
     e.stopPropagation();
     vscode.postMessage({ type: 'markDone', line: r.line });
-    r.done = true; setFold(r, ui.foldDone); tr.querySelector('.h-title').innerHTML = headTitle(r); tr.classList.add('done'); refresh();
+    r.done = true; r.sig = null; setFold(r, ui.foldDone); tr.querySelector('.h-title').innerHTML = headTitle(r); tr.classList.add('done'); refresh();
     return;
   }
   if (a === 'notes') {
@@ -518,52 +584,78 @@ function reveal(el) {
   if (ui.filter !== 'all' && tr.classList.contains('gone')) setFilter('all');
   if (changed) { applyVisibility(); keepView(); }
 }
-function goTo(el, flash) {
+/** Scroll to a place. A heading or part from the contents goes to the top (a row just under its table's sticky header),
+ * so the crumbs and the contents name it; a Find match or the next answer goes a third of the way down, with context. */
+function goTo(el, flash, atTop) {
   if (!el) return;
   reveal(el);
   const mr = main.getBoundingClientRect(), er = el.getBoundingClientRect();
-  main.scrollTop += er.top - mr.top - mr.height / 3;
+  main.scrollTop += er.top - mr.top - (atTop ? (el.tagName === 'TR' ? 52 : 12) : mr.height / 3);
   if (flash) { el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
   if (innerWidth <= 900) setToc(false);
+}
+/** The first part still on screen below a line: measured part by part, so parts far above are never laid out. */
+function partAt(line) {
+  for (const p of parts) { if (!p.el || p.el.hidden) continue; if (p.el.getBoundingClientRect().bottom > line) return p; }
+  return null;
 }
 function nextWhere(pred) {
   const list = items.filter(pred);
   if (!list.length) return null;
   const mr = main.getBoundingClientRect();
   const line = mr.top + mr.height / 3 + 4;
-  const anchor = items.find(it => !it.el.classList.contains('gone') && it.el.getBoundingClientRect().top > line);
+  const at = partAt(line);
+  let anchor = null;
+  if (at) {
+    anchor = at.items.find(it => !it.el.classList.contains('gone') && it.el.getBoundingClientRect().top > line);
+    if (!anchor) anchor = items.find(it => it.part.idx > at.idx && !it.el.classList.contains('gone'));
+  }
   const from = anchor ? anchor.ix : items.length;
   return list.find(it => it.ix >= from) || list[0];
 }
 
 // ── Where you are: the crumbs, the contents highlight, the place kept across redraws ────────────────────────────────
+// On each scroll frame: read where the page is first, then write only what changed.
 let spyQueued = false;
+let spyPart, spyHead;
+let tocActive = { p: null, h: null };
 main.addEventListener('scroll', () => { if (!spyQueued) { spyQueued = true; requestAnimationFrame(spy); } }, { passive: true });
 function spy() {
   spyQueued = false;
   if (!doc) return;
-  const top = main.getBoundingClientRect().top + 90;
+  const mtop = main.getBoundingClientRect().top;
+  const top = mtop + 90;
   let part = null, head = null;
   for (const p of parts) { if (p.el.hidden) continue; if (p.el.getBoundingClientRect().top <= top) part = p; else break; }
   if (part) for (const h of part.heads) { if (!h.el || h.el.classList.contains('gone')) continue; if (h.el.getBoundingClientRect().top <= top) head = h; else break; }
+  view.scroll = anchorNow(mtop, part);
+  keepViewSoon();
+  if (part === spyPart && head === spyHead) return;
+  spyPart = part; spyHead = head;
   const crumbs = [`<span>${esc(doc.file)}</span>`];
   if (part && part.title) crumbs.push(`<b>${part.num ? 'Part ' + esc(part.num) + ' · ' : ''}${part.title}</b>`);
   if (head) crumbs.push(`<span>${esc(head.num)} ${head.title}</span>`);
-  $('#crumbs').innerHTML = crumbs.join('<span class="sep">›</span>');
-  $$('#tocTree .tp').forEach(el => el.classList.toggle('active', !!part && +el.dataset.p === part.idx));
-  $$('#tocTree .th').forEach(a => a.classList.toggle('active', !!head && +a.dataset.h === head.gid));
-  if (part && !ui.tocOpen[part.id || part.idx]) { ui.tocOpen[part.id || part.idx] = true; const el = $(`#tocTree .tp[data-p="${part.idx}"]`); if (el) el.classList.add('open'); }
-  const act = $('#tocTree .th.active') || $('#tocTree .tp.active');
-  if (act) { const tr = $('#toc').getBoundingClientRect(), ar = act.getBoundingClientRect(); if (ar.top < tr.top + 150 || ar.bottom > tr.bottom - 20) $('#toc').scrollTop += ar.top - tr.top - tr.height / 3; }
-  view.scroll = anchorNow(); keepView();
+  setHtml($('#crumbs'), crumbs.join('<span class="sep">›</span>'));
+  const tp = part ? part.tocEl : null, th = head ? head.tocEl : null;
+  if (tocActive.p !== tp) { if (tocActive.p) tocActive.p.classList.remove('active'); if (tp) tp.classList.add('active'); }
+  if (tocActive.h !== th) { if (tocActive.h) tocActive.h.classList.remove('active'); if (th) th.classList.add('active'); }
+  tocActive = { p: tp, h: th };
+  if (part && !ui.tocOpen[part.id || part.idx]) { ui.tocOpen[part.id || part.idx] = true; if (tp) tp.classList.add('open'); }
+  const act = th || tp;
+  if (act) { const toc = $('#toc'); const tr = toc.getBoundingClientRect(), ar = act.getBoundingClientRect(); if (ar.top < tr.top + 150 || ar.bottom > tr.bottom - 20) toc.scrollTop += ar.top - tr.top - tr.height / 3; }
 }
-/** The row at the top of the page and how far down it sits, to come back to after a redraw. */
-function anchorNow() {
-  const top = main.getBoundingClientRect().top;
-  for (const r of allRows) {
-    if (!r.el || r.el.classList.contains('gone')) continue;
-    const b = r.el.getBoundingClientRect();
-    if (b.bottom > top + 1) return { key: r.k === 'i' ? 'i:' + r.key : r.k === 'h' ? 'h:' + r.id : null, off: b.top - top, gid: r.gid };
+/** The row at the top of the page and how far down it sits, to come back to after a redraw. Starts at the part above
+ * the one in view, so the rows of earlier parts are never measured. */
+function anchorNow(top = main.getBoundingClientRect().top, near = partAt(top)) {
+  const from = near ? Math.max(0, near.idx - 1) : 0;
+  for (let i = from; i < parts.length; i++) {
+    const p = parts[i];
+    if (!p.el || p.el.hidden) continue;
+    for (const r of p.rows) {
+      if (!r.el || r.el.classList.contains('gone')) continue;
+      const b = r.el.getBoundingClientRect();
+      if (b.bottom > top + 1) return { key: r.k === 'i' ? 'i:' + r.key : r.k === 'h' ? 'h:' + r.id : null, off: b.top - top, gid: r.gid };
+    }
   }
   return null;
 }
@@ -595,10 +687,10 @@ split.addEventListener('dblclick', () => vscode.postMessage({ type: 'tocWidth', 
 function drawLeaf() {
   const t = tally(items);
   const left = t.todo + (t.steps - t.ticked);
-  leaf.innerHTML = `${I.list}<span class="lt">Checklist</span><span class="lb" title="${left} left to answer">${left}</span>${t.no ? `<span class="lb no" title="${t.no} No">${t.no}</span>` : ''}${t.notes ? `<span class="lb nt" title="${t.notes} notes">${t.notes}</span>` : ''}`;
+  setHtml(leaf, `${I.list}<span class="lt">Checklist</span><span class="lb" title="${left} left to answer">${left}</span>${t.no ? `<span class="lb no" title="${t.no} No">${t.no}</span>` : ''}${t.notes ? `<span class="lb nt" title="${t.notes} notes">${t.notes}</span>` : ''}`);
   leaf.title = `${left} left · ${t.no} No · ${t.notes} notes. Open the progress panel; drag to move.`;
 }
-function setPanel(on) { ui.panel = on; $('#app').classList.toggle('panel-open', on); leaf.setAttribute('aria-expanded', String(on)); saveUi(); }
+function setPanel(on) { ui.panel = on; $('#app').classList.toggle('panel-open', on); leaf.setAttribute('aria-expanded', String(on)); if (on) drawPanel(); saveUi(); }
 function setPinned(on) { ui.pinned = on; $('#app').classList.toggle('pinned', on); drawPanel(); saveUi(); }
 let leafDrag = null;
 leaf.addEventListener('pointerdown', e => { leafDrag = { y: e.clientY, top: leaf.getBoundingClientRect().top, moved: false }; leaf.setPointerCapture(e.pointerId); });
@@ -675,8 +767,9 @@ function colorsHtml() {
 }
 function saveColors() { applyColors(); vscode.postMessage({ type: 'colors', value: colors }); drawPanel(); }
 
+// The progress panel is drawn only while it is open; opening it draws it.
 function drawPanel() {
-  if (!doc) return;
+  if (!doc || !ui.panel) return;
   const t = tally(items);
   const left = t.todo + (t.steps - t.ticked);
   const seg = (name, val, label, cur) => `<button type="button" data-${name}="${val}" aria-pressed="${cur === val}">${label}</button>`;
@@ -718,7 +811,7 @@ $('#panel').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.filter) { setFilter(ui.filter === b.dataset.filter && b.classList.contains('st') ? 'all' : b.dataset.filter); return; }
   if (b.dataset.theme) { themeSetting = b.dataset.theme; applyTheme(); vscode.postMessage({ type: 'theme', value: themeSetting }); drawPanel(); return; }
-  if (b.dataset.goto) { goTo(parts[+b.dataset.goto].el); return; }
+  if (b.dataset.goto) { goTo(parts[+b.dataset.goto].el, false, true); return; }
   if (b.dataset.preset !== undefined) {
     const pr = PRESETS[+b.dataset.preset];
     const c = { ...colors };
@@ -734,9 +827,12 @@ $('#panel').addEventListener('click', e => {
   if (a === 'nextno') { const it = nextWhere(x => x.state === 'no'); if (it) goTo(it.el, true); }
   if (a === 'archive') vscode.postMessage({ type: 'archive' });
 });
+// The colour picker sends a value per mouse move: restyle the page at most once a frame.
+let colorQueued = false;
 $('#panel').addEventListener('input', e => {
   const role = e.target.dataset && e.target.dataset.role; if (!role) return;
-  colors = { ...colors, [role]: e.target.value }; applyColors();
+  colors = { ...colors, [role]: e.target.value };
+  if (!colorQueued) { colorQueued = true; requestAnimationFrame(() => { colorQueued = false; applyColors(); }); }
 });
 $('#panel').addEventListener('change', e => {
   if (e.target.dataset.role) { saveColors(); return; }
@@ -832,7 +928,6 @@ window.addEventListener('message', ({ data: m }) => {
   if (m.type === 'theme') { themeSetting = m.theme; applyTheme(); drawPanel(); return; }
   if (m.type === 'colors') { colors = m.colors || {}; applyColors(); drawPanel(); return; }
   if (m.type !== 'render') return;
-  const anchor = first ? view.scroll : anchorNow();
   if (first) {
     Object.assign(ui, m.ui || {});
     themeSetting = m.theme || 'auto';
@@ -845,8 +940,19 @@ window.addEventListener('message', ({ data: m }) => {
     $('#app').classList.toggle('pinned', !!ui.pinned);
     applyTheme(); applyColors();
   }
+  const titleChanged = !doc || doc.title !== m.title;
   doc = m; who = m.who || ''; today = m.today || '';
   items.forEach(it => { if (it.form) forms[it.key] = it.form; });
+  stamp(m.outline);
+  if (!first && !titleChanged && patch(m.outline)) {
+    // Same rows as on the page: the changed ones were drawn again in place, nothing moved. The page's rows are the
+    // model now, so the message's own copy of every row is let go.
+    doc = { ...m, outline: { title: m.outline.title, pictureMax: m.outline.pictureMax, parts: [] } };
+    if (findState.q) runFind(false);
+    spy();
+    return;
+  }
+  const anchor = first ? view.scroll : anchorNow();
   build(m.outline);
   drawAll();
   if (findState.q) runFind(false);
