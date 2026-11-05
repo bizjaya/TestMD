@@ -9,8 +9,10 @@ export interface Section { line: number; level: number; title: string; done: boo
 export interface Checklist { items: Item[]; sections: Section[]; }
 
 export type Action = 'yes' | 'no' | 'clear' | 'tick' | 'untick' | 'note';
-/** One answer. `reason` is the No's reason or the note's text; `images` are paths relative to the .md. */
-export interface Answer { action: Action; line: number; reason?: string; images?: string[]; who: string; date: string; }
+/** A picture under an item: its label (`img3`) and its path relative to the .md. */
+export interface Picture { label: string; path: string; }
+/** One answer. `reason` is the No's reason or the note's text. */
+export interface Answer { action: Action; line: number; reason?: string; images?: Picture[]; who: string; date: string; }
 
 const BOX_LINE = /^(\s*(?:[-*+]|\d+[.)])\s+)\[( |x|X)\]/;
 const REASON_LINE = /^(\s*[-*+]\s+)(❌.*)$/;
@@ -75,7 +77,7 @@ function strikeReasons(lines: string[], start: number, end: number): void {
 /** The lines of a reason or a note under an item: its first line, more text, then one picture per line. */
 function addedLines(indent: string, head: string, a: Answer): string[] {
   const [first, ...rest] = (a.reason ?? '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-  const pictures = (a.images ?? []).map(src => `${indent}  ![](${src.replace(/ /g, '%20')})`);
+  const pictures = (a.images ?? []).map(p => `${indent}  ![${p.label}](${p.path.replace(/ /g, '%20')})`);
   return [`${indent}- ${head} · ${a.date} · ${a.who}${first ? ` — ${first}` : ''}`, ...rest.map(r => `${indent}  ${r}`), ...pictures];
 }
 
@@ -169,4 +171,80 @@ export function archiveFolderName(docBase: string, date: string, taken: (name: s
   const base = `${docBase}-${date}`;
   if (!taken(base)) return base;
   for (let n = 2; ; n++) if (!taken(`${base}-${n}`)) return `${base}-${n}`;
+}
+
+// ── Pictures: img1, img2 … across the whole checklist ────────────────────────────────────────────────────────────────
+const PICTURE = /!\[img(\d+)\]\(([^)\s]+)\)/g;
+const PICTURE_LINE = /^\s*!\[img(\d+)\]\(([^)\s]+)\)\s*$/;
+export const DELETED_MENTION = '*(picture deleted)*';
+const safeDecode = (s: string) => { try { return decodeURIComponent(s); } catch { return s; } };
+
+/** The highest picture number in the checklist (0 when it has none): the next picture is this + 1. */
+export function maxPictureNumber(text: string): number {
+  let max = 0;
+  for (const m of text.matchAll(PICTURE)) max = Math.max(max, Number(m[1]));
+  return max;
+}
+
+/** The lines of every reason and note: the marker line and its deeper-indented lines below it. */
+function addedBlockLines(lines: string[]): Set<number> {
+  const out = new Set<number>();
+  for (let i = 0; i < lines.length; i++) {
+    const m = ADDED_LINE.exec(lines[i]);
+    if (!m) continue;
+    out.add(i);
+    for (let j = i + 1; j < lines.length && lines[j].trim() && lines[j].search(/\S/) > m[1].length; j++) out.add(j);
+  }
+  return out;
+}
+
+/**
+ * Close the gaps: the pictures keep their order and become img1 … imgN again. Every "imgN" word in a reason or a note
+ * follows its picture; a word naming a deleted picture becomes "*(picture deleted)*".
+ */
+export function renumberPictures(text: string, deleted: number[] = []): string {
+  const numbers = [...new Set([...text.matchAll(PICTURE)].map(m => Number(m[1])))].sort((a, b) => a - b);
+  const map = new Map(numbers.map((n, i) => [n, i + 1]));
+  if (!deleted.length && numbers.every((n, i) => n === i + 1)) return text;
+  const eol = eolOf(text);
+  const lines = text.split(/\r?\n/);
+  for (const i of addedBlockLines(lines)) {
+    lines[i] = lines[i].replace(/\bimg(\d+)\b/g, (word, d: string) => {
+      const n = Number(d);
+      if (map.has(n)) return `img${map.get(n)}`;
+      return deleted.includes(n) ? DELETED_MENTION : word;
+    });
+  }
+  return lines.join(eol);
+}
+
+/** Take one picture out of its note or reason (a note left with no text and no picture goes too), then renumber. */
+export function removePicture(text: string, path: string): { text: string; label?: string } {
+  const eol = eolOf(text);
+  const lines = text.split(/\r?\n/);
+  const at = lines.findIndex(l => { const m = PICTURE_LINE.exec(l); return !!m && safeDecode(m[2]) === path; });
+  if (at < 0) return { text };
+  const number = Number(PICTURE_LINE.exec(lines[at])![1]);
+  lines.splice(at, 1);
+  // The note it belonged to: the nearest note or reason line above it.
+  for (let i = at - 1; i >= 0; i--) {
+    const m = ADDED_LINE.exec(lines[i]);
+    if (!m) continue;
+    const rest = lines.slice(i + 1).findIndex(l => !l.trim() || l.search(/\S/) <= m[1].length);
+    const block = lines.slice(i + 1, rest < 0 ? lines.length : i + 1 + rest);
+    const emptyNote = /📝 \*\*Note\*\* · [^—]*$/.test(lines[i]) && !block.length;
+    if (emptyNote) lines.splice(i, 1);
+    break;
+  }
+  return { text: renumberPictures(lines.join(eol), [number]), label: `img${number}` };
+}
+
+/** The picture files (names in `folder`) that the checklist still links to. */
+export function linkedPictureFiles(text: string, folder: string): Set<string> {
+  const out = new Set<string>();
+  for (const m of text.matchAll(/!\[[^\]]*\]\(([^)\s]+)\)/g)) {
+    const path = safeDecode(m[1]);
+    if (path.startsWith(`${folder}/`)) out.add(path.slice(folder.length + 1));
+  }
+  return out;
 }

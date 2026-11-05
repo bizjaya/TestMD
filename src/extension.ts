@@ -82,5 +82,5 @@ export function activate(context: vscode.ExtensionContext) {
 export function deactivate() {}
 
 // For an integration test run inside VS Code: the file and text operations, without the panel.
-export { applyTextChange, savePicture } from './files';
-export { applyAnswer, clearRound } from './core/model';
+export { applyTextChange, deletePicture, savePicture, sweepPictures } from './files';
+export { applyAnswer, clearRound, renumberPictures } from './core/model';

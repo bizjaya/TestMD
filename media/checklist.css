@@ -112,3 +112,10 @@ li.td-note { list-style: none; color: var(--tmd-fg); background: var(--tmd-code-
   border-radius: 6px; padding: 4px 10px; margin: 6px 0; }
 li.td-reason img, li.td-note img { display: block; max-width: min(100%, 480px); max-height: 320px; margin: 6px 0;
   border-radius: 5px; border: 1px solid var(--tmd-border); }
+
+/* A picture's label (img1, img2 …) at its top-left, so a note can name it */
+.td-fig { position: relative; display: block; width: fit-content; max-width: 100%; }
+.td-fig::before { content: attr(data-label); position: absolute; top: 12px; left: 6px; z-index: 1; padding: 1px 7px; border-radius: 4px;
+  font: 700 11px/1.5 var(--vscode-font-family, system-ui, sans-serif); color: #ffffff; background: rgba(0, 0, 0, .7); pointer-events: none; }
+li.td-reason .td-fig, li.td-note .td-fig { max-width: min(100%, 480px); }
+li.td-reason .td-fig img, li.td-note .td-fig img { max-width: 100%; }

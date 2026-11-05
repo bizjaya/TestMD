@@ -146,6 +146,27 @@ export function checklistPlugin(md: MarkdownIt, opts: ChecklistOptions): void {
   if (md.core.ruler.getRules('').some(fn => (fn as { testmd?: boolean }).testmd)) return; // registered once per engine
   const rule = Object.assign(checklistRule(opts), { testmd: true });
   md.core.ruler.push('testmd_checklist', rule);
+  labelPictures(md, opts.interactive);
+}
+
+const safeDecode = (s: string) => { try { return decodeURIComponent(s); } catch { return s; } };
+const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+const CLOSE_ICON = '<svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true"><path d="M2 2l6 6M8 2l-6 6" ' +
+  'stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+
+/** A picture whose alt text is imgN shows that label at its top-left; in the panel it also gets a delete button. */
+function labelPictures(md: MarkdownIt, interactive: boolean): void {
+  const base = md.renderer.rules.image;
+  md.renderer.rules.image = (tokens, idx, options, env, self) => {
+    const html = base ? base(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options);
+    const label = tokens[idx].content;
+    if (!/^img\d+$/.test(label)) return html;
+    const src = tokens[idx].attrGet('src') ?? '';
+    const del = interactive
+      ? `<button class="td-fig-x" data-td-delpic="${escapeHtml(safeDecode(src))}" title="Delete ${label}">${CLOSE_ICON}</button>`
+      : '';
+    return `<span class="td-fig" data-label="${label}">${html}${del}</span>`;
+  };
 }
 
 export function createRenderer(opts: ChecklistOptions): MarkdownIt {

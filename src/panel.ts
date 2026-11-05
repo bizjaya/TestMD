@@ -2,21 +2,20 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { createRenderer } from './core/markdown';
-import { applyAnswer, doneable, markDone, readChecklist, stats, Action } from './core/model';
+import { applyAnswer, doneable, markDone, maxPictureNumber, readChecklist, renumberPictures, stats, Action, Picture } from './core/model';
 import { settings, userName, today } from './settings';
-import { applyTextChange, archiveRound, savePicture } from './files';
+import { applyTextChange, archiveRound, deletePicture, savePicture, sweepPictures } from './files';
 
 interface FromWebview {
-  type: 'ready' | 'answer' | 'markDone' | 'open' | 'theme' | 'tocWidth' | 'picture' | 'archive';
+  type: 'ready' | 'answer' | 'markDone' | 'open' | 'theme' | 'tocWidth' | 'deletePicture' | 'archive';
   action?: Action;
   line?: number;
   reason?: string;
-  images?: string[];
+  /** Pictures from the box, written only now that the note or No is saved. */
+  pictures?: { label: string; data: string; ext: string }[];
   href?: string;
+  path?: string;
   value?: string | number;
-  id?: string;
-  data?: string;
-  ext?: string;
 }
 
 const TOC_WIDTH_KEY = 'testmd.tocWidth';
@@ -27,6 +26,7 @@ export class ChecklistPanel {
   private static readonly panels = new Map<string, ChecklistPanel>();
   private readonly disposables: vscode.Disposable[] = [];
   private timer: NodeJS.Timeout | undefined;
+  private swept = false;
 
   static show(context: vscode.ExtensionContext, uri: vscode.Uri): void {
     const open = ChecklistPanel.panels.get(uri.toString());
@@ -93,14 +93,17 @@ ${links}
     const html = createRenderer({ interactive: true, stepLabels }).render(text);
     const list = readChecklist(text, stepLabels);
     await this.panel.webview.postMessage({
-      type: 'render', html, stats: stats(list), doneable: doneable(list),
+      type: 'render', html, stats: stats(list), doneable: doneable(list), pictureMax: maxPictureNumber(text),
       theme: panelTheme(), tocWidth: this.context.globalState.get<number>(TOC_WIDTH_KEY),
     });
   }
 
   private async onMessage(m: FromWebview): Promise<void> {
     try {
-      if (m.type === 'ready') return void (await this.render());
+      if (m.type === 'ready') {
+        if (!this.swept) { this.swept = true; await sweepPictures(this.uri); }
+        return void (await this.render());
+      }
       if (m.type === 'open' && m.href) return void (await this.open(m.href));
       if (m.type === 'theme' && (m.value === 'auto' || m.value === 'light' || m.value === 'dark')) {
         return void (await vscode.workspace.getConfiguration('testmd').update('panelTheme', m.value, vscode.ConfigurationTarget.Global));
@@ -108,22 +111,26 @@ ${links}
       if (m.type === 'tocWidth' && typeof m.value === 'number') {
         return void (await this.context.globalState.update(TOC_WIDTH_KEY, m.value));
       }
-      if (m.type === 'picture' && m.id && m.data && (m.ext === 'webp' || m.ext === 'png')) {
-        const saved = await savePicture(this.uri, m.data, m.ext);
-        await this.panel.webview.postMessage({ type: 'pictureSaved', id: m.id, path: saved.relative,
-          src: this.panel.webview.asWebviewUri(saved.uri).toString() });
+      if (m.type === 'deletePicture' && typeof m.path === 'string') {
+        const choice = await vscode.window.showWarningMessage('Delete this picture?',
+          { modal: true, detail: 'It is taken out of its note and deleted from disk. Later pictures move up one number, and the notes follow.' },
+          'Delete');
+        if (choice === 'Delete') await deletePicture(this.uri, m.path, settings(this.uri).saveAfterEachAnswer, () => this.render());
         return;
       }
       if (m.type === 'archive') return void (await archiveRound(this.uri));
       if (m.type === 'answer' && m.action && typeof m.line === 'number') {
         const who = await userName(this.uri);
-        const images = (m.images ?? []).filter(s => typeof s === 'string' && !/^[a-z]+:|^\/|\.\./i.test(s));
-        await this.edit(text => applyAnswer(text, { action: m.action!, line: m.line!, reason: m.reason, images, who, date: today() },
-          settings(this.uri).stepLabels));
+        const images: Picture[] = [];
+        for (const pic of m.pictures ?? []) {
+          if (!/^img\d+$/.test(pic.label) || (pic.ext !== 'webp' && pic.ext !== 'png') || typeof pic.data !== 'string') continue;
+          images.push({ label: pic.label, path: (await savePicture(this.uri, pic.data, pic.ext)).relative });
+        }
+        await this.edit(text => renumberPictures(applyAnswer(text,
+          { action: m.action!, line: m.line!, reason: m.reason, images, who, date: today() }, settings(this.uri).stepLabels)));
       }
       if (m.type === 'markDone' && typeof m.line === 'number') await this.edit(text => markDone(text, m.line!));
     } catch (err) {
-      if (m.type === 'picture' && m.id) void this.panel.webview.postMessage({ type: 'pictureFailed', id: m.id });
       void vscode.window.showWarningMessage(`TestMD: ${err instanceof Error ? err.message : String(err)}`);
       await this.render();
     }

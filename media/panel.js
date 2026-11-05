@@ -5,6 +5,7 @@
   const root = document.getElementById('td-root');
   const bar = document.getElementById('td-bar');
   let openForm = null; // the open No or note box (see showForm)
+  let pictureMax = 0;  // the highest picture number in the checklist
   let themeSetting = 'auto'; // auto | light | dark
 
   // ── Theme: Auto follows the editor; Light and Dark force the whole panel, menu included ──────────────────────
@@ -50,6 +51,7 @@
     const y = window.scrollY;
     if (msg.theme) themeSetting = msg.theme;
     if (msg.tocWidth) setTocWidth(msg.tocWidth);
+    pictureMax = msg.pictureMax || 0;
     root.innerHTML = msg.html;
     for (const line of msg.doneable) {
       const h = root.querySelector(`[data-td-hline="${line}"]`);
@@ -97,7 +99,7 @@
       `<textarea rows="2" placeholder="${no ? 'What did you see instead?' : 'A note for this item'} — paste a picture with Ctrl+V. Ctrl+Enter saves, Esc cancels."></textarea>` +
       '<div class="td-pics"></div>' +
       `<div class="td-form-row"><button class="td-save">${no ? 'Save No' : 'Save note'}</button><button class="td-cancel">Cancel</button>` +
-      '<span class="td-form-hint">Pictures are saved beside the checklist and linked from it.</span></div>';
+      '<span class="td-form-hint">Name a picture by its label (img1 …) in the text. Pictures are saved with the note.</span></div>';
     const ta = form.querySelector('textarea');
     ta.value = openForm.text;
     li.insertBefore(form, li.querySelector(':scope > ul, :scope > ol'));
@@ -124,27 +126,42 @@
     });
   }
 
+  // Pictures in the box are labelled img<N> from the checklist's highest number + 1, in the order pasted. They stay in
+  // the panel until the note is saved. Leaving one out closes the gap, and the box's text follows.
+  const label = i => `img${pictureMax + i + 1}`;
+
   function drawPictures() {
     const box = root.querySelector('.td-form .td-pics');
     if (!box || !openForm) return;
     box.innerHTML = '';
-    openForm.pictures.forEach(p => {
+    openForm.pictures.forEach((p, i) => {
       const cell = document.createElement('span');
       cell.className = `td-pic${p.src ? '' : ' td-pic-wait'}${p.failed ? ' td-pic-failed' : ''}`;
-      cell.innerHTML = p.src ? `<img src="${p.src}" alt="">` : `<span>${p.failed ? 'not saved' : 'saving…'}</span>`;
+      cell.innerHTML = (p.src ? `<img src="${p.src}" alt="">` : `<span>${p.failed ? 'could not read' : 'reading…'}</span>`) +
+        `<span class="td-pic-label">${label(i)}</span>`;
       const x = document.createElement('button');
       x.className = 'td-pic-x';
-      x.title = 'Leave this picture out';
+      x.title = `Leave ${label(i)} out`;
       x.innerHTML = '<svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true"><path d="M2 2l6 6M8 2l-6 6" ' +
         'stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
-      x.addEventListener('click', ev => {
-        ev.preventDefault();
-        openForm.pictures = openForm.pictures.filter(q => q !== p);
-        drawPictures();
-      });
+      x.addEventListener('click', ev => { ev.preventDefault(); leaveOut(i); });
       cell.appendChild(x);
       box.appendChild(cell);
     });
+  }
+
+  function leaveOut(i) {
+    const gone = pictureMax + i + 1;
+    const last = pictureMax + openForm.pictures.length;
+    openForm.pictures.splice(i, 1);
+    openForm.text = openForm.text.replace(/\bimg(\d+)\b/g, (word, d) => {
+      const n = Number(d);
+      if (n === gone) return '*(picture deleted)*';
+      return n > gone && n <= last ? `img${n - 1}` : word;
+    });
+    const ta = root.querySelector('.td-form textarea');
+    if (ta) ta.value = openForm.text;
+    drawPictures();
   }
 
   /** Shrink to at most 1,600 px on the longest side and encode as WebP (PNG if this editor cannot make WebP). */
@@ -160,27 +177,21 @@
     const bytes = new Uint8Array(await blob.arrayBuffer());
     let bin = '';
     for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-    return { data: btoa(bin), ext: blob.type === 'image/webp' ? 'webp' : 'png' };
+    const ext = blob.type === 'image/webp' ? 'webp' : 'png';
+    return { data: btoa(bin), ext };
   }
 
   async function addPicture(file) {
     if (!openForm) return;
-    const p = { id: Math.random().toString(36).slice(2), path: '', src: '', failed: false };
+    const p = { data: '', ext: '', src: '', failed: false };
     openForm.pictures.push(p);
     drawPictures();
     try {
       const { data, ext } = await encode(file);
-      vscode.postMessage({ type: 'picture', id: p.id, data, ext });
+      Object.assign(p, { data, ext, src: `data:image/${ext};base64,${data}` });
     } catch {
       p.failed = true;
-      drawPictures();
     }
-  }
-
-  function pictureSaved(msg, ok) {
-    const p = openForm?.pictures.find(q => q.id === msg.id);
-    if (!p) return;
-    if (ok) { p.path = msg.path; p.src = msg.src; } else p.failed = true;
     drawPictures();
   }
 
@@ -188,14 +199,14 @@
 
   function saveForm() {
     if (!openForm) return;
-    if (openForm.pictures.some(p => !p.src && !p.failed)) return; // still saving a picture
+    if (openForm.pictures.some(p => !p.src && !p.failed)) return; // still reading a picture
     const reason = openForm.text.trim();
-    const images = openForm.pictures.filter(p => p.path).map(p => p.path);
-    if ((openForm.mode === 'no' && !reason) || (!reason && !images.length)) {
+    const pictures = openForm.pictures.map((p, i) => ({ label: label(i), data: p.data, ext: p.ext })).filter(p => p.data);
+    if ((openForm.mode === 'no' && !reason) || (!reason && !pictures.length)) {
       root.querySelector('.td-form textarea')?.focus();
       return;
     }
-    vscode.postMessage({ type: 'answer', action: openForm.mode, line: openForm.line, reason, images });
+    vscode.postMessage({ type: 'answer', action: openForm.mode, line: openForm.line, reason, pictures });
     closeForm();
   }
 
@@ -252,6 +263,8 @@
     if (done) { e.preventDefault(); vscode.postMessage({ type: 'markDone', line: Number(done.dataset.tdMarkdone) }); return; }
     if (t.closest('.td-save')) { e.preventDefault(); saveForm(); return; }
     if (t.closest('[data-td-archive]')) { e.preventDefault(); vscode.postMessage({ type: 'archive' }); return; }
+    const del = t.closest('[data-td-delpic]');
+    if (del) { e.preventDefault(); vscode.postMessage({ type: 'deletePicture', path: del.dataset.tdDelpic }); return; }
     const img = t.closest('#td-root img');
     if (img && !t.closest('.td-form')) { e.preventDefault(); showPicture(img.src); return; }
     if (t.closest('.td-cancel')) { e.preventDefault(); closeForm(); return; }
@@ -271,8 +284,6 @@
   window.addEventListener('message', e => {
     if (e.data?.type === 'render') render(e.data);
     if (e.data?.type === 'theme') { themeSetting = e.data.theme; applyTheme(); }
-    if (e.data?.type === 'pictureSaved') pictureSaved(e.data, true);
-    if (e.data?.type === 'pictureFailed') pictureSaved(e.data, false);
   });
   vscode.postMessage({ type: 'ready' });
 })();
