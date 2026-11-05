@@ -6,7 +6,7 @@ checklist, and anyone (or any tool) can read them as plain text.
 
 ## What you get
 
-- **TestMD: Run Checklist** (the square-with-a-tick button at the top right of a Markdown file's tab, or of its preview's tab) opens the
+- **Open in TestMD** (the square-with-a-tick button at the top right of a Markdown file's tab or of its preview's tab) opens the
   checklist beside the editor:
   - a **tick** for each step you do,
   - **Yes / No** for each thing you check. **No** asks what went wrong, then writes it under the check with the date and
@@ -97,7 +97,7 @@ Pill colours: `success`, `warning`, `danger`, `info`, `muted`. The menu has no b
 ## Good to know
 
 - VS Code's own preview is read-only: it shows each answer as a badge and a note saying where to answer. Ticking and
-  answering happen in the Run Checklist panel.
+  answering happen in the TestMD panel.
 - Find takes over Ctrl+F in VS Code's preview only while the preview has focus. Click into it first.
 - The panel edits only the lines an answer changes, so undo works and edits elsewhere in the file are kept. If the file
   changed under an answer, the panel reloads and asks you to answer again.

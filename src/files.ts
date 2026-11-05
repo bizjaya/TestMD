@@ -27,7 +27,8 @@ export async function savePicture(doc: vscode.Uri, base64: string, ext: 'webp' |
 }
 
 /** Replace only the lines that changed, so undo, the cursor and other edits in the file are left alone. */
-export async function applyTextChange(uri: vscode.Uri, change: (text: string) => string, save: boolean): Promise<void> {
+export async function applyTextChange(uri: vscode.Uri, change: (text: string) => string, save: boolean,
+  afterEdit?: () => Promise<void>): Promise<void> {
   const doc = await vscode.workspace.openTextDocument(uri);
   const before = doc.getText();
   const after = change(before);
@@ -55,6 +56,7 @@ export async function applyTextChange(uri: vscode.Uri, change: (text: string) =>
   const we = new vscode.WorkspaceEdit();
   we.replace(uri, range, text);
   await vscode.workspace.applyEdit(we);
+  if (afterEdit) await afterEdit();
   if (save) await doc.save();
 }
 

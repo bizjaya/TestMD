@@ -12,7 +12,7 @@
     'height="13" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M4.6 8.2l2.3 2.3 4.6-5" ' +
     'fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   note.innerHTML = '<b>Read-only preview.</b> To tick and answer, press <span class="tmd-key">' + icon + '</span> ' +
-    '<b>Run Checklist</b> at the top right of this tab. Your answers open in a <b>Checklist</b> tab beside it.';
+    '<b>Open in TestMD</b> at the top right of this tab. You answer in the <b>Checklist</b> tab that opens beside it.';
   document.documentElement.appendChild(note);
 
   const sync = () => { note.hidden = !document.querySelector('li.td-item'); };

@@ -40,7 +40,7 @@
     "commands": [
       {
         "command": "testmd.runChecklist",
-        "title": "Run Checklist",
+        "title": "Open in TestMD",
         "category": "TestMD",
         "icon": {
           "light": "media/run-light.svg",
@@ -75,6 +75,20 @@
         {
           "command": "testmd.runChecklist",
           "when": "resourceLangId == markdown",
+          "group": "navigation"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "testmd.runChecklist",
+          "when": "resourceLangId == markdown",
+          "group": "1_open"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "testmd.runChecklist",
+          "when": "editorLangId == markdown",
           "group": "navigation"
         }
       ]
