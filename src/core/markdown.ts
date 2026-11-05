@@ -21,7 +21,7 @@ export const NOTE = /^(?:~~)?📝/;
 
 /** A short paragraph that starts in bold, or ends with a colon, is a block label: "**2.1 · Do**",
  *  "**2.1 · Pass when** *(after sending)*", "Steps:". The label is the bold part (or the whole line). */
-function blockLabel(inline: Token): string | undefined {
+export function blockLabel(inline: Token): string | undefined {
   const src = inline.content.trim();
   if (src.length > 100) return undefined;
   const bold = /^(?:\*\*([^*]+)\*\*|__([^_]+)__)/.exec(src);
@@ -30,7 +30,7 @@ function blockLabel(inline: Token): string | undefined {
   return undefined;
 }
 
-function isStepLabel(label: string, stepLabels: string[]): boolean {
+export function isStepLabel(label: string, stepLabels: string[]): boolean {
   const l = label.toLowerCase();
   return stepLabels.some(s => {
     const w = s.toLowerCase();

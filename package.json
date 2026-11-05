@@ -2,7 +2,7 @@
   "name": "testmd",
   "displayName": "TestMD",
   "description": "Run Markdown checklists in VS Code: tick each step, answer Yes or No to each check, and write why it failed right under it, all saved in the .md.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "bizjaya",
   "license": "MIT",
   "author": "BizJaya TechLab S/B",
@@ -133,7 +133,63 @@
             "Always dark"
           ],
           "default": "auto",
-          "description": "The Run Checklist panel's colours, menu included. The Auto / Light / Dark switch at the bottom right of the panel sets this."
+          "description": "The TestMD panel's colours. The Auto / Light / Dark switch in the panel's CHECKLIST leaf sets this."
+        },
+        "testmd.colors": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": false,
+          "markdownDescription": "The TestMD panel's colours, one per role, used in light and dark themes alike (softer shades are mixed from each). Set them with the pickers in the panel's CHECKLIST leaf, or here; leave a role out for its default.",
+          "properties": {
+            "primary": {
+              "type": "string",
+              "format": "color-hex",
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "description": "Buttons, links, the selected option, the menu highlight."
+            },
+            "secondary": {
+              "type": "string",
+              "format": "color-hex",
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "description": "The CHECKLIST leaf, part labels, the logo."
+            },
+            "yes": {
+              "type": "string",
+              "format": "color-hex",
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "description": "Done steps, Yes, the progress bars."
+            },
+            "no": {
+              "type": "string",
+              "format": "color-hex",
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "description": "No answers and their rows."
+            },
+            "note": {
+              "type": "string",
+              "format": "color-hex",
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "description": "Note buttons and note cards."
+            },
+            "mark": {
+              "type": "string",
+              "format": "color-hex",
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "description": "The highlighted pass conditions (<mark>)."
+            },
+            "find": {
+              "type": "string",
+              "format": "color-hex",
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "description": "Find matches, and the contents filter."
+            },
+            "test": {
+              "type": "string",
+              "format": "color-hex",
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "description": "A tint on the row of each test in the tables."
+            }
+          }
         }
       }
     },
