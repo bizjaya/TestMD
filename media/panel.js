@@ -21,6 +21,7 @@ const I = {
   close: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
   list: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="m8 12 3 3 5-6"/></svg>',
   collapse: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 4 5 5 5-5M7 20l5-5 5 5"/></svg>',
+  copy: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>',
   expand: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 9 5-5 5 5M7 15l5 5 5-5"/></svg>',
 };
 
@@ -155,8 +156,14 @@ function tally(list) {
 const pct = (a, b) => (a / Math.max(1, b) * 100).toFixed(2);
 
 // ── Drawing ───────────────────────────────────────────────────────────────────────────────────────────────────────
+/** A button that copies "16.2.1.1 - Go to …" (or "Part 16 - …"), to paste where you report. */
+function copyBtn(num, text, part) {
+  const words = plain(text).replace(/\s+/g, ' ').trim();
+  const label = num ? `${part ? 'Part ' : ''}${num} - ${words}` : words;
+  return `<button class="cp" type="button" data-act="copy" data-copy="${esc(label)}" title="Copy: ${esc(label)}" aria-label="Copy the number and words">${I.copy}</button>`;
+}
 function headTitle(h) {
-  return `<span class="tt">${h.title}</span>${h.done ? '<span class="pill success">Done</span>' : ''}${h.pills ? ' ' + h.pills : ''}`;
+  return `<span class="tt">${h.title}</span>${h.done ? '<span class="pill success">Done</span>' : ''}${h.pills ? ' ' + h.pills : ''}${h.group ? '' : copyBtn(h.num, h.title)}`;
 }
 function rowHtml(r) {
   const sub = r.rel > 0 ? ' sub' : '';
@@ -176,7 +183,7 @@ function rowHtml(r) {
 }
 const itemClass = it => `r-i s-${it.state} k-${it.kind}${it.rel > 0 ? ' sub' : ''}`;
 function itemHtml(it) {
-  return `<tr class="${itemClass(it)}" data-g="${it.gid}" data-key="${esc(it.key)}"><td class="c-num">${esc(it.num)}</td><td class="c-text">${it.html}</td><td class="c-ans">${ansHtml(it)}</td></tr>`;
+  return `<tr class="${itemClass(it)}" data-g="${it.gid}" data-key="${esc(it.key)}"><td class="c-num">${esc(it.num)}</td><td class="c-text">${it.html}${copyBtn(it.num, it.html)}</td><td class="c-ans">${ansHtml(it)}</td></tr>`;
 }
 function ansHtml(it) {
   const live = it.notes.filter(n => n.type !== 'old');
@@ -225,7 +232,7 @@ function partHtml(p) {
   }
   const about = p.intro.length ? `<details class="about"><summary>${cv}<b>About this part</b><span>${esc(plain(p.intro[0]).slice(0, 90))}…</span></summary><div class="md">${p.intro.join('')}</div></details>` : '';
   const eyebrow = p.num ? 'Part ' + esc(p.num) : '';
-  return `<section class="part" id="${esc(p.id)}" data-p="${p.idx}"><div class="part-hd"><div class="ph">${eyebrow ? `<div class="eyebrow">${eyebrow}</div>` : ''}<h2>${p.title || esc(doc.title)}</h2></div>${foldBar('p', p.idx, 'every test in this part')}<div class="meter" data-meter="${p.idx}"></div></div>${about}`
+  return `<section class="part" id="${esc(p.id)}" data-p="${p.idx}"><div class="part-hd"><div class="ph">${eyebrow ? `<div class="eyebrow">${eyebrow}</div>` : ''}<h2>${p.title || esc(doc.title)}${p.title ? copyBtn(p.num, p.title, true) : ''}</h2></div>${foldBar('p', p.idx, 'every test in this part')}<div class="meter" data-meter="${p.idx}"></div></div>${about}`
     + `<table class="grid"><colgroup><col class="c1"><col><col class="c3"></colgroup><thead><tr><th>#</th><th>Step</th><th>Answer</th></tr></thead><tbody>${p.rows.map(rowHtml).join('')}</tbody></table></section>`;
 }
 function drawAll() {
@@ -509,6 +516,7 @@ content.addEventListener('click', e => {
   }
   const btn = e.target.closest('[data-act]');
   if (!btn) return;
+  if (btn.dataset.act === 'copy') { e.stopPropagation(); vscode.postMessage({ type: 'copy', text: btn.dataset.copy }); toast('Copied: ' + btn.dataset.copy.slice(0, 60)); return; }
   const tr = btn.closest('tr');
   const gid = tr ? +(tr.dataset.g ?? tr.dataset.n) : NaN;
   const r = allRows[gid];

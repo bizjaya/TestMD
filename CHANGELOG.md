@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2 (2026-11-06)
+
+- A copy button at the end of every part title, test title and step or check copies its number and words, such as
+  `16.2.1.1 - Go to FinG Research › FinTemplates.` or `Part 16 - FinGraph — FinResearch to Telegram`, ready to paste
+  wherever you report what you found. It is faint until you point at the row.
+
 ## 0.2.1 (2026-11-05)
 
 - Answering is about 100 times lighter on a long checklist: when the file changes, only the rows that changed are
