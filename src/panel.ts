@@ -9,7 +9,7 @@ import { settings, userName, today } from './settings';
 import { applyTextChange, archiveRound, deletePicture, savePicture, sweepPictures } from './files';
 
 interface FromWebview {
-  type: 'ready' | 'answer' | 'markDone' | 'open' | 'theme' | 'tocWidth' | 'deletePicture' | 'archive' | 'ui' | 'colors';
+  type: 'ready' | 'answer' | 'markDone' | 'open' | 'theme' | 'tocWidth' | 'deletePicture' | 'archive' | 'ui' | 'colors' | 'copy';
   action?: Action;
   line?: number;
   reason?: string;
@@ -18,6 +18,8 @@ interface FromWebview {
   href?: string;
   path?: string;
   value?: unknown;
+  /** For copy: "16.2.1.1 - the words", to paste where the tester reports. */
+  text?: string;
 }
 
 const TOC_WIDTH_KEY = 'testmd.tocWidth';
@@ -159,6 +161,7 @@ ${panelBody()}
         return;
       }
       if (m.type === 'archive') return void (await archiveRound(this.uri));
+      if (m.type === 'copy' && typeof m.text === 'string') return void (await vscode.env.clipboard.writeText(m.text.slice(0, 4000)));
       if (m.type === 'answer' && m.action && typeof m.line === 'number') {
         const who = await userName(this.uri);
         const images: Picture[] = [];

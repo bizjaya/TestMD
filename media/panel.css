@@ -223,6 +223,12 @@ mark.tqm { background: var(--find); color: inherit; padding: 0; border-radius: 2
 .r-h.folded .chev svg { transform: rotate(0deg); }
 .h-title { font-size: 14.5px; font-weight: 600; line-height: 1.4; }
 .h-title .pill { margin-left: 6px; }
+/* Copy "16.2.1.1 - the words" for a chat: faint at the end of a title or step, clear on hover or focus. */
+.cp { display: inline-grid; place-items: center; width: 22px; height: 22px; margin-left: 6px; padding: 0; vertical-align: -5px;
+  border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--faint); cursor: pointer; opacity: .45; }
+.cp:hover, .cp:focus-visible { opacity: 1; color: var(--link); border-color: var(--border); background: var(--raised); }
+tr:hover .cp, .part-hd:hover .cp { opacity: 1; }
+.part-hd h2 .cp { vertical-align: 2px; }
 .h-intro { margin-top: 3px; font-size: 13px; color: var(--muted); }
 .r-h.sub .h-title { font-size: 14px; }
 .r-h.sub .c-text { padding-left: 26px; }
