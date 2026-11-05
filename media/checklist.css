@@ -1,4 +1,4 @@
-/* TestMD — the checklist look. Loaded into VS Code's own Markdown preview and into the Run Checklist panel.
+/* TestMD — the checklist look. Loaded into VS Code's own Markdown preview and into the TestMD panel.
  *
  * Colours are tokens on <html>: light by default, dark when the editor is dark. The panel's Light / Dark switch sets
  * html[data-tmd-theme], which then decides alone. */

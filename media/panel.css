@@ -46,8 +46,10 @@ li.td-item:hover > .td-notebtn, li.td-item:hover > p > .td-notebtn, .td-notebtn:
   border-radius: 6px; border: 1px solid var(--tmd-border); background: var(--tmd-bg); overflow: hidden; font-size: 11px; color: var(--tmd-muted); }
 .td-pic img { max-width: 100%; max-height: 100%; }
 .td-pic-failed { border-color: var(--tmd-no); color: var(--tmd-no); }
-.td-pic-x { position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 0;
-  background: rgba(0, 0, 0, .6); color: #fff; font: 600 13px/20px system-ui, sans-serif; cursor: pointer; }
+.td-pic-x { position: absolute; top: 4px; right: 4px; display: flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 0; background: rgba(0, 0, 0, .65); color: #fff; cursor: pointer; }
+.td-pic-x svg { display: block; }
+.td-pic-x:hover { background: var(--tmd-no); }
 #td-root li.td-reason img, #td-root li.td-note img { cursor: zoom-in; }
 #td-lightbox { position: fixed; inset: 0; z-index: 2147483646; display: flex; align-items: center; justify-content: center;
   background: rgba(0, 0, 0, .78); cursor: zoom-out; padding: 24px; box-sizing: border-box; }

@@ -54,7 +54,7 @@ function firstInline(tokens: Token[], from: number): number {
 
 function badge(kind: ItemKind, state: ItemState): string {
   const text = kind === 'step' ? (state === 'yes' ? '✓' : '&nbsp;') : state === 'yes' ? 'Yes' : state === 'no' ? 'No' : '?';
-  return `<span class="td-badge td-${state}" title="Read-only here. To answer, press Run Checklist (the square with a tick) at the top right.">${text}</span>`;
+  return `<span class="td-badge td-${state}" title="Read-only here. To answer, press Open in TestMD (the square with a tick) at the top right.">${text}</span>`;
 }
 
 const noteButton = (line: number) =>

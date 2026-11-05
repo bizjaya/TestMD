@@ -1,4 +1,4 @@
-// The "Run Checklist" panel: the .md rendered with its controls; every answer is written back into the .md.
+// The TestMD panel ("Open in TestMD"): the .md rendered with its controls; every answer is written back into the .md.
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { createRenderer } from './core/markdown';
@@ -51,7 +51,7 @@ export class ChecklistPanel {
     vscode.workspace.onDidChangeTextDocument(e => {
       if (e.document.uri.toString() !== uri.toString()) return;
       clearTimeout(this.timer);
-      this.timer = setTimeout(() => void this.render(), 150);
+      this.timer = setTimeout(() => void this.render(), 60);
     }, null, this.disposables);
   }
 
@@ -86,6 +86,7 @@ ${links}
   }
 
   private async render(): Promise<void> {
+    clearTimeout(this.timer);
     const doc = await vscode.workspace.openTextDocument(this.uri);
     const text = doc.getText();
     const { stepLabels } = settings(this.uri);
@@ -129,7 +130,7 @@ ${links}
   }
 
   private edit(change: (text: string) => string): Promise<void> {
-    return applyTextChange(this.uri, change, settings(this.uri).saveAfterEachAnswer);
+    return applyTextChange(this.uri, change, settings(this.uri).saveAfterEachAnswer, () => this.render());
   }
 
   private async open(href: string): Promise<void> {

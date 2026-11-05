@@ -135,7 +135,8 @@
       const x = document.createElement('button');
       x.className = 'td-pic-x';
       x.title = 'Leave this picture out';
-      x.textContent = '×';
+      x.innerHTML = '<svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true"><path d="M2 2l6 6M8 2l-6 6" ' +
+        'stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
       x.addEventListener('click', ev => {
         ev.preventDefault();
         openForm.pictures = openForm.pictures.filter(q => q !== p);
@@ -198,6 +199,26 @@
     closeForm();
   }
 
+  // ── An answer shows at once; the redraw from the saved file follows and confirms it ─────────────────────────
+  function showAnswer(button, action) {
+    const li = button.closest('li.td-item');
+    if (!li) return;
+    const set = state => { li.classList.remove('td-yes', 'td-no', 'td-none'); li.classList.add(`td-${state}`); };
+    if (action === 'tick' || action === 'untick') {
+      const on = action === 'tick';
+      button.classList.toggle('td-on', on);
+      button.textContent = on ? '✓' : '';
+      button.dataset.tdAct = on ? 'untick' : 'tick';
+      set(on ? 'yes' : 'none');
+    } else if (action === 'yes' || action === 'clear') {
+      const on = action === 'yes';
+      button.classList.toggle('td-on', on);
+      button.dataset.tdAct = on ? 'clear' : 'yes';
+      li.querySelector(':scope .td-ctl .td-no')?.classList.remove('td-on');
+      set(on ? 'yes' : 'none');
+    }
+  }
+
   // ── A picture in the page opens full size ──────────────────────────────────────────────────────────────────────
   function showPicture(src) {
     const box = document.createElement('div');
@@ -216,6 +237,7 @@
       e.preventDefault();
       const line = Number(act.dataset.tdLine);
       if (act.dataset.tdAct === 'no' || act.dataset.tdAct === 'note') { showForm(line, act.dataset.tdAct); return; }
+      showAnswer(act, act.dataset.tdAct);
       vscode.postMessage({ type: 'answer', action: act.dataset.tdAct, line });
       return;
     }
