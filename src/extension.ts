@@ -84,3 +84,4 @@ export function deactivate() {}
 // For an integration test run inside VS Code: the file and text operations, without the panel.
 export { applyTextChange, deletePicture, savePicture, sweepPictures } from './files';
 export { applyAnswer, clearRound, renumberPictures } from './core/model';
+export { buildOutline } from './core/outline';

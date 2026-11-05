@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.0 (2026-11-05)
+
+- The panel is laid out like a small website: a header with the checklist's title, where you are, Find and what is
+  left; a contents menu that folds by section, with its own filter and a **☰** to hide it; and a table per section
+  with a row per test, its block labels as sub-rows, each step or check as a row with its tick or Yes / No in the last
+  column, and notes in a row under their item.
+- Collapse / Expand on each section and for all of them; Alt+click a test's arrow to fold every test of its level.
+- The count in the corner moved into the CHECKLIST leaf on the right edge: what is left, No answers and notes on the
+  leaf; totals, Next to answer, Next No, a filter, every section's progress, the theme switch, colours and Archive
+  round in its panel, pinned beside the page or lying over it.
+- Colours: six presets and a picker per role, kept in the new `testmd.colors` setting.
+
 ## 0.1.0 (2026-11-04)
 
 - The TestMD panel (Open in TestMD): a tick for each step, Yes / No for each check, a reason written under every No, a count of
