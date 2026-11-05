@@ -117,21 +117,45 @@ test('a note and a No carry pictures as lines under the item; a new round clears
   const { clearRound, archiveFolderName } = await import('../src/core/model');
   const pic = 'checklist.assets/3f2a.webp';
   let text = answer(DOC, 7, 'tick');
-  text = applyAnswer(text, { line: 7, action: 'note', reason: 'Proof below.', images: [pic], who, date }, LABELS);
-  text = applyAnswer(text, { line: 13, action: 'no', reason: 'No name shown.', images: ['checklist.assets/my shot.webp'], who, date }, LABELS);
+  text = applyAnswer(text, { line: 7, action: 'note', reason: 'Proof below.', images: [{ label: 'img1', path: pic }], who, date }, LABELS);
+  text = applyAnswer(text, { line: 13, action: 'no', reason: 'No name shown.', images: [{ label: 'img2', path: 'checklist.assets/my shot.webp' }], who, date }, LABELS);
   const lines = text.split('\n');
   assert.equal(lines[8], '  - 📝 **Note** · 2026-11-04 · Ann — Proof below.');
-  assert.equal(lines[9], `    ![](${pic})`);
+  assert.equal(lines[9], `    ![img1](${pic})`);
   assert.ok(lines.includes('  - ❌ **No** · 2026-11-04 · Ann — No name shown.'));
-  assert.ok(lines.includes('    ![](checklist.assets/my%20shot.webp)'));
+  assert.ok(lines.includes('    ![img2](checklist.assets/my%20shot.webp)'));
   assert.throws(() => applyAnswer(text, { line: 7, action: 'note', reason: ' ', images: [], who, date }, LABELS), /note or paste/);
 
   const html = createRenderer({ interactive: true, stepLabels: LABELS }).render(text);
   assert.match(html, /<li class="td-note">/);
-  assert.match(html, /<img src="checklist.assets\/3f2a.webp"/);
+  assert.match(html, /<span class="td-fig" data-label="img1"><img src="checklist.assets\/3f2a.webp" alt="img1">/);
+  assert.match(html, /data-td-delpic="checklist.assets\/my shot.webp"/);
   assert.match(html, /data-td-act="note" data-td-line="16"/);
 
   const fresh = clearRound(text, LABELS);
   assert.equal(fresh, DOC.replace('- [x] **1.1.1.2**', '- [ ] **1.1.1.2**'));
   assert.equal(archiveFolderName('ACT.E2ETEST', '2026-11-05', n => n === 'ACT.E2ETEST-2026-11-05'), 'ACT.E2ETEST-2026-11-05-2');
+});
+
+test('deleting a picture closes the gap, and the notes follow', async () => {
+  const { removePicture, maxPictureNumber, linkedPictureFiles, renumberPictures } = await import('../src/core/model');
+  const P = (n: number) => ({ label: `img${n}`, path: `c.assets/p${n}.webp` });
+  let text = applyAnswer(DOC, { line: 7, action: 'note', reason: 'See img1 and img2.', images: [P(1), P(2)], who, date }, LABELS);
+  text = applyAnswer(text, { line: 14, action: 'note', reason: 'img3 shows the error, img4 the log; compare img2.', images: [P(3), P(4)], who, date }, LABELS);
+  assert.equal(maxPictureNumber(text), 4);
+  const r = removePicture(text, 'c.assets/p2.webp');
+  assert.equal(r.label, 'img2');
+  assert.ok(!r.text.includes('p2.webp'));
+  assert.match(r.text, /📝 \*\*Note\*\* · 2026-11-04 · Ann — See img1 and \*\(picture deleted\)\*\./);
+  assert.match(r.text, /— img2 shows the error, img3 the log; compare \*\(picture deleted\)\*\./);
+  assert.match(r.text, /!\[img2\]\(c\.assets\/p3\.webp\)/);
+  assert.match(r.text, /!\[img3\]\(c\.assets\/p4\.webp\)/);
+  assert.equal(maxPictureNumber(r.text), 3);
+  assert.deepEqual([...linkedPictureFiles(r.text, 'c.assets')].sort(), ['p1.webp', 'p3.webp', 'p4.webp']);
+  assert.equal(renumberPictures(r.text), r.text); // already in order
+
+  // A note that was only a picture goes with its picture.
+  let solo = applyAnswer(DOC, { line: 7, action: 'note', images: [P(1)], who, date }, LABELS);
+  solo = removePicture(solo, 'c.assets/p1.webp').text;
+  assert.equal(solo, DOC);
 });

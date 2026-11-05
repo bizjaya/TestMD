@@ -1,8 +1,11 @@
 # TestMD
 
 Run Markdown checklists inside VS Code. Tick each step, answer **Yes** or **No** to each check, and when something
-fails, write why right under it. Everything is saved in the `.md` itself, so the results live in git next to the
-checklist, and anyone (or any tool) can read them as plain text.
+fails, write why right under it, with screenshots. Everything is saved in the `.md` itself, so the results live in git
+next to the checklist, and anyone (or any tool) can read them as plain text.
+
+Made for test books and acceptance runs, and just as good for any checklist: a release runbook, an onboarding list, a
+to-do list. Any `- [ ]` list in a Markdown file works.
 
 ## What you get
 
@@ -63,13 +66,18 @@ After a run:
 
 ```markdown
 - [x] **1.1.2.2** <mark>Your name shows.</mark>
-  - 📝 **Note** · 2026-11-05 · Ann — top right, as expected.
-    ![](checklist.assets/3f2a9c1e-5b7d-4e0a-9c1b-2d8e6f4a7b90.webp)
+  - 📝 **Note** · 2026-11-05 · Ann — top right, as expected (img4).
+    ![img4](checklist.assets/3f2a9c1e-5b7d-4e0a-9c1b-2d8e6f4a7b90.webp)
 ```
 
-A pasted picture is shrunk to at most 1,600 px on its longest side, saved as WebP in a folder named after the
-checklist (`checklist.assets/`), and linked from the line under the item. Nothing is embedded in the `.md`, so the file
-stays small and git shows each picture as its own file.
+- **Saved with the note.** A pasted picture stays in the panel until you save the note; leaving it out or cancelling
+  writes nothing. On save it is shrunk to at most 1,600 px on its longest side and saved as WebP in a folder named
+  after the checklist (`checklist.assets/<GUID>.webp`). Nothing is embedded in the `.md`, so the file stays small and git
+  shows each picture as its own file. Opening the panel deletes any picture the checklist no longer links to.
+- **Numbered across the checklist.** Pictures are img1, img2 … in the order pasted; the label shows at each picture's
+  top-left and is the link's alt text, so a note (or a colleague, or a tool) can name one exactly: "see img4".
+- **Gaps close.** Delete a picture (its × in the panel, or leave it out of the box before saving) and the later ones
+  move up a number; the notes' own "imgN" words follow, and a mention of the deleted one reads *(picture deleted)*.
 
 ### Pills, highlights and the menu
 

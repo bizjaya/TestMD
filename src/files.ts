@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
-import { archiveFolderName, clearRound } from './core/model';
+import { archiveFolderName, clearRound, linkedPictureFiles, removePicture } from './core/model';
 import { settings, today } from './settings';
 
 const MAX_PICTURE_BYTES = 8 * 1024 * 1024;
@@ -93,4 +93,33 @@ export async function archiveRound(doc: vscode.Uri): Promise<void> {
   await applyTextChange(doc, t => clearRound(t, settings(doc).stepLabels), true);
   if (hadPictures) await vscode.workspace.fs.delete(pictures.uri, { recursive: true, useTrash: false });
   void vscode.window.showInformationMessage(`TestMD: archived to archive/${folderName}/ and cleared for the next round.`);
+}
+
+/** Delete the pictures beside the checklist that it no longer links to. Returns how many went. */
+export async function sweepPictures(doc: vscode.Uri): Promise<number> {
+  const folder = picturesFolder(doc);
+  if (!(await exists(folder.uri))) return 0;
+  const linked = linkedPictureFiles((await vscode.workspace.openTextDocument(doc)).getText(), folder.name);
+  let removed = 0;
+  const entries = await vscode.workspace.fs.readDirectory(folder.uri);
+  for (const [name, type] of entries) {
+    if (type !== vscode.FileType.File || linked.has(name) || !/\.(webp|png)$/i.test(name)) continue;
+    await vscode.workspace.fs.delete(vscode.Uri.joinPath(folder.uri, name), { useTrash: false });
+    removed++;
+  }
+  if (removed && removed === entries.length) await vscode.workspace.fs.delete(folder.uri, { recursive: true, useTrash: false });
+  return removed;
+}
+
+/** Delete one saved picture: out of the checklist (later pictures move up a number), then off the disk. */
+export async function deletePicture(doc: vscode.Uri, path: string, save: boolean, afterEdit?: () => Promise<void>): Promise<void> {
+  const folder = picturesFolder(doc);
+  if (!path.startsWith(`${folder.name}/`) || path.includes('..') || path.slice(folder.name.length + 1).includes('/')) {
+    throw new Error('That picture is not one of this checklist\'s.');
+  }
+  let label: string | undefined;
+  await applyTextChange(doc, text => { const r = removePicture(text, path); label = r.label; return r.text; }, save, afterEdit);
+  if (!label) return;
+  const file = vscode.Uri.joinPath(folder.uri, path.slice(folder.name.length + 1));
+  if (await exists(file)) await vscode.workspace.fs.delete(file, { useTrash: false });
 }
