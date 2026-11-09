@@ -336,18 +336,22 @@ function refreshToc() {
     if (!p.table) { setHtml(p.tocTc, ''); return; }
     // A part counts its tests (a test marked done is often cut down to its title, so its answers are gone); the tests
     // under it count their answers.
+    // As a percentage of the way through, so a part whose tests are half answered never reads "0/3" (operator,
+    // 2026-11-09): a test marked done counts whole, any other test by the share of its steps answered.
     const tests = p.heads.filter(isTest);
     const done = tests.filter(h => h.done).length;
     const no = tally(p.items).no;
-    p.tocTc.classList.toggle('all', !!tests.length && done === tests.length);
-    setHtml(p.tocTc, `${no ? '<span class="dot"></span> ' : ''}${tests.length ? `${done}/${tests.length}` : ''}`);
-    p.tocTc.title = `${tests.length ? `${done} of ${tests.length} tests done` : ''}${no ? `${tests.length ? ' · ' : ''}${no} No` : ''}`;
+    const share = h => { if (h.done) return 1; const t = tally(h.items); return t.total ? t.answered / t.total : 0; };
+    const pc = tests.length ? Math.floor(tests.reduce((a, h) => a + share(h), 0) / tests.length * 100) : null;
+    p.tocTc.classList.toggle('all', pc === 100 && !no);
+    setHtml(p.tocTc, `${no ? '<span class="dot"></span> ' : ''}${pc === null ? '' : `${pc}%`}`);
+    p.tocTc.title = `${tests.length ? `${pc}% through · ${done} of ${tests.length} tests done` : ''}${no ? `${tests.length ? ' · ' : ''}${no} No` : ''}`;
   });
   heads.forEach(h => {
     if (!h.tocDot) return;
     if (!h.items.length) { setHtml(h.tocDot, ''); return; }
     const t = tally(h.items);
-    setHtml(h.tocDot, `${t.no ? '<span class="dot"></span> ' : ''}${t.answered}/${t.total}`);
+    setHtml(h.tocDot, `${t.no ? '<span class="dot"></span> ' : ''}${Math.floor(t.answered / t.total * 100)}%`);
     h.tocDot.classList.toggle('all', t.answered === t.total && !t.no);
     h.tocDot.title = tallyTitle(t);
   });
