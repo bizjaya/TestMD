@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.4 (2026-11-09)
+
+- The contents menu shows each count as a percentage. A section reads how far through its tests you are, a test marked
+  done counting whole and any other by the share of its rows answered, so a section whose tests are mostly answered no
+  longer reads `0/3` as if nothing were done. Each test reads the share of its rows answered (`75%`). Pointing at a
+  count still gives the numbers (`3 of 4 tests done`, `6 Yes or done · 1 No · 1 left, of 8`).
+
 ## 0.2.3 (2026-11-09)
 
 - Every count reads the same way: *answered of total*, then the No answers in red, such as `4 of 4 · 2 No`. A *Do*,

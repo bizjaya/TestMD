@@ -13,8 +13,9 @@ to-do list. Any `- [ ]` list in a Markdown file works.
   checklist beside the editor, laid out like a small website:
   - **a header** with the checklist's title, where you are in it, Find, and how much is left;
   - **a contents menu** on the left that folds by section, with its own filter (words, or *Not done* / *With a No*).
-    A section shows how many of its tests are done (`0/3`); each test under it, how many of its rows are answered (`6/8`),
-    with a red dot when one is a No.
+    A section shows how far through its tests you are (`58%`: a test marked done counts whole, any other by the share of
+    its rows answered); each test under it, the share of its rows answered (`75%`), with a red dot when one is a No.
+    Pointing at a count gives the numbers behind it.
     **☰** hides it; drag its edge to widen or narrow it;
   - **a table per section** (each `##` heading): a row per test or sub-heading, its block labels (*Do*, *Look for*,
     *Pass when*) as sub-rows, and each step or check as a row with its answer in the last column:
