@@ -136,6 +136,8 @@ mark.tqm { background: var(--find); color: inherit; padding: 0; border-radius: 2
 .tp-row .tt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tp-row .tc { flex: none; font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums; }
 .tp-row .tc.all { color: var(--yes); }
+.th .tc { flex: none; display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.th .tc.all { color: var(--yes); }
 .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--no); flex: none; }
 .tp.active > .tp-row { color: var(--link); font-weight: 600; }
 .tp-kids { display: none; margin: 2px 0 6px 18px; border-left: 1px solid var(--border); }
@@ -171,6 +173,8 @@ mark.tqm { background: var(--find); color: inherit; padding: 0; border-radius: 2
 .part.done .part-hd h2 { color: var(--muted); }
 .meter { flex: none; width: 210px; font-size: 12px; color: var(--muted); text-align: right; }
 .meter b { color: var(--fg); font-weight: 600; }
+.meter .nos, .pc .nos, .r-b .nos { color: var(--no); font-weight: 600; }
+.meter .ma { margin-top: 2px; }
 .bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; display: flex; margin-top: 5px; }
 .bar i { display: block; height: 100%; background: var(--yes-fill); }
 .bar i.n { background: var(--no-fill); }
@@ -361,6 +365,8 @@ mark.fm.cur { background: var(--find-cur); outline: 2px solid var(--find-cur); }
   background: var(--on-second); color: var(--second); font-variant-numeric: tabular-nums; }
 .leaf .lb.no { background: var(--no-fill); color: var(--on-no); box-shadow: 0 0 0 2px var(--on-second); }
 .leaf .lb.nt { background: var(--note); color: var(--on-note); box-shadow: 0 0 0 2px var(--on-second); }
+.leaf .lg { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.leaf .ll { font-size: 8.5px; font-weight: 600; line-height: 1; opacity: .9; }
 .app.panel-open .leaf { right: var(--panel-w); }
 .panel { position: fixed; top: var(--hdr-h); right: 0; bottom: 0; width: var(--panel-w); z-index: 35; background: var(--raised);
   border-left: 1px solid var(--border); box-shadow: var(--shadow); transform: translateX(100%); transition: transform .22s ease;

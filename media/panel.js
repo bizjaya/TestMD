@@ -143,17 +143,27 @@ function build(outline) {
 const isTest = h => !h.group && (h.items.length > 0 || h.done);
 
 // ── Counting ──────────────────────────────────────────────────────────────────────────────────────────────────────
+// A test marked done settles every box under it that was left empty: it counts as done, not as left to answer.
+const closed = it => { for (let h = it.head; h; h = h.parent) if (h.done) return true; return false; };
+const stateOf = it => it.state === 'none' && closed(it) ? 'yes' : it.state;
+const isLeft = it => stateOf(it) === 'none';
 function tally(list) {
   const t = { steps: 0, ticked: 0, checks: 0, yes: 0, no: 0, todo: 0, notes: 0, answered: 0, total: list.length };
   for (const it of list) {
-    if (it.kind === 'step') { t.steps++; if (it.state === 'yes') t.ticked++; }
-    else { t.checks++; if (it.state === 'yes') t.yes++; else if (it.state === 'no') t.no++; else t.todo++; }
-    if (it.state !== 'none') t.answered++;
+    const st = stateOf(it);
+    if (it.kind === 'step') { t.steps++; if (st === 'yes') t.ticked++; }
+    else { t.checks++; if (st === 'yes') t.yes++; else if (st === 'no') t.no++; else t.todo++; }
+    if (st !== 'none') t.answered++;
     t.notes += it.notes.filter(n => n.type !== 'old').length;
   }
   return t;
 }
 const pct = (a, b) => (a / Math.max(1, b) * 100).toFixed(2);
+// Every count reads the same way: "answered of total", then the No count in red. Its bar has the same three parts:
+// green = Yes or done, red = No, grey = left. So a bar never shows more or less than the words beside it.
+const tallyTitle = t => `${t.ticked + t.yes} Yes or done · ${t.no} No · ${t.total - t.answered} left, of ${t.total}`;
+const tallyText = t => `${t.answered} of ${t.total}${t.no ? ` · <span class="nos">${t.no} No</span>` : ''}`;
+const tallyBar = (t, tag = 'span') => `<${tag} class="bar"><i style="width:${pct(t.ticked + t.yes, t.total)}%"></i><i class="n" style="width:${pct(t.no, t.total)}%"></i></${tag}>`;
 
 // ── Drawing ───────────────────────────────────────────────────────────────────────────────────────────────────────
 /** A button that copies "16.2.1.1 - Go to …" (or "Part 16 - …"), to paste where you report. */
@@ -266,21 +276,23 @@ function headAns(h) {
   if (h.done) return '<span class="pill success">Done</span>';
   const t = tally(h.items);
   if (t.answered === t.total && t.no === 0 && !h.group) return '<button class="markdone" type="button" data-act="markdone">Mark test done</button>';
-  return `<span class="prog"><span>${t.answered} of ${t.total}${t.no ? ` · <span class="nos">${t.no} No</span>` : ''}</span><span class="bar"><i style="width:${pct(t.ticked + t.yes, t.total)}%"></i><i class="n" style="width:${pct(t.no, t.total)}%"></i></span></span>`;
+  return `<span class="prog" title="${tallyTitle(t)}"><span>${tallyText(t)}</span>${tallyBar(t)}</span>`;
 }
 function refresh() {
   heads.forEach(h => setHtml(h.ansEl, headAns(h)));
   blocks.forEach(b => {
     if (!b.ansEl) return;
     const t = tally(b.items);
-    setHtml(b.ansEl, b.kind === 'step' ? `${t.ticked} of ${t.steps} done` : `${t.yes} Yes${t.no ? ` · ${t.no} No` : ''} of ${t.checks}`);
+    setHtml(b.ansEl, `<span class="bt" title="${tallyTitle(t)}">${tallyText(t)}</span>`);
   });
   parts.forEach(p => {
     if (!p.meterEl) return;
     const t = tally(p.items);
     const tests = p.heads.filter(isTest);
     const done = tests.filter(h => h.done).length;
-    setHtml(p.meterEl, `<div>${tests.length ? `<b>${done}</b> of ${tests.length} tests done · ` : ''}<b>${t.total - t.answered}</b> left</div><div class="bar"><i style="width:${pct(t.ticked + t.yes, t.total)}%"></i><i class="n" style="width:${pct(t.no, t.total)}%"></i></div>`);
+    // Two counts, each on its own line: tests marked done, then the answers, which the bar right under it draws.
+    setHtml(p.meterEl, `${tests.length ? `<div class="mt"><b>${done}</b> of ${tests.length} tests done</div>` : ''}`
+      + `<div class="ma" title="${tallyTitle(t)}"><b>${t.answered}</b> of ${t.total} answered${t.no ? ` · <span class="nos">${t.no} No</span>` : ''}</div>${tallyBar(t, 'div')}`);
     p.el.classList.toggle('done', tests.length > 0 && done === tests.length);
   });
   refreshToc(); refreshChip(); drawLeaf(); drawPanel(); applyVisibility();
@@ -299,7 +311,7 @@ function refreshChip() {
 const tocF = { q: '', show: 'all' };
 function drawToc() {
   $('#tocTree').innerHTML = parts.map(p => {
-    const kids = p.heads.filter(h => h.rel <= 2).map(h => `<a class="th lv${h.rel}${h.done ? ' done' : ''}" href="#${esc(h.id)}" data-h="${h.gid}"><span class="hn">${esc(h.num)}</span><span class="ht">${esc(h.plain)}</span>${h.done ? '<span class="pill success">Done</span>' : ''}<span data-tdot></span></a>`).join('');
+    const kids = p.heads.filter(h => h.rel <= 2).map(h => `<a class="th lv${h.rel}${h.done ? ' done' : ''}" href="#${esc(h.id)}" data-h="${h.gid}"><span class="hn">${esc(h.num)}</span><span class="ht">${esc(h.plain)}</span>${h.done ? '<span class="pill success">Done</span>' : '<span class="tc" data-tdot></span>'}</a>`).join('');
     const open = ui.tocOpen[p.id || p.idx] ? ' open' : '';
     return `<div class="tp${open}" data-p="${p.idx}"><button class="tp-row" type="button" data-act="tpart">${kids ? `<span class="cv">${I.chev}</span>` : '<span class="cv" style="width:14px"></span>'}<span class="tn">${esc(p.num)}</span><span class="tt">${esc(p.plain)}</span><span class="tc" data-tc></span></button>${kids ? `<div class="tp-kids">${kids}</div>` : ''}</div>`;
   }).join('');
@@ -316,19 +328,29 @@ function drawToc() {
   });
   tocActive = { p: null, h: null };
 }
-const headOpen = h => (isTest(h) ? !h.done : false) || h.items.some(it => it.state === 'none');
+const headOpen = h => (isTest(h) ? !h.done : false) || h.items.some(isLeft);
 const headNo = h => h.items.some(it => it.state === 'no');
 function refreshToc() {
   parts.forEach(p => {
     if (!p.tocTc) return;
     if (!p.table) { setHtml(p.tocTc, ''); return; }
+    // A part counts its tests (a test marked done is often cut down to its title, so its answers are gone); the tests
+    // under it count their answers.
     const tests = p.heads.filter(isTest);
     const done = tests.filter(h => h.done).length;
     const no = tally(p.items).no;
     p.tocTc.classList.toggle('all', !!tests.length && done === tests.length);
-    setHtml(p.tocTc, `${no ? '<span class="dot" title="Has a No"></span> ' : ''}${tests.length ? `${done}/${tests.length}` : ''}`);
+    setHtml(p.tocTc, `${no ? '<span class="dot"></span> ' : ''}${tests.length ? `${done}/${tests.length}` : ''}`);
+    p.tocTc.title = `${tests.length ? `${done} of ${tests.length} tests done` : ''}${no ? `${tests.length ? ' · ' : ''}${no} No` : ''}`;
   });
-  heads.forEach(h => { if (h.tocDot) setHtml(h.tocDot, headNo(h) ? '<span class="dot"></span>' : ''); });
+  heads.forEach(h => {
+    if (!h.tocDot) return;
+    if (!h.items.length) { setHtml(h.tocDot, ''); return; }
+    const t = tally(h.items);
+    setHtml(h.tocDot, `${t.no ? '<span class="dot"></span> ' : ''}${t.answered}/${t.total}`);
+    h.tocDot.classList.toggle('all', t.answered === t.total && !t.no);
+    h.tocDot.title = tallyTitle(t);
+  });
   applyTocFilter();
 }
 function markText(text, q) {
@@ -392,7 +414,7 @@ $('#tocTree').addEventListener('click', e => {
 $('#tocFold').addEventListener('click', () => { ui.tocOpen = {}; $$('#tocTree .tp').forEach(el => el.classList.remove('open')); saveUi(); });
 
 // ── What shows: folds and the filter ─────────────────────────────────────────────────────────────────────────────
-const match = it => ui.filter === 'all' || (ui.filter === 'todo' && it.state === 'none') || (ui.filter === 'no' && it.state === 'no')
+const match = it => ui.filter === 'all' || (ui.filter === 'todo' && isLeft(it)) || (ui.filter === 'no' && it.state === 'no')
   || (ui.filter === 'notes' && it.notes.some(n => n.type !== 'old'));
 function hiddenByFold(r) { for (let h = r.k === 'h' ? r.parent : r.head; h; h = h.parent) if (h.folded) return true; return false; }
 function applyVisibility() {
@@ -695,7 +717,9 @@ split.addEventListener('dblclick', () => vscode.postMessage({ type: 'tocWidth', 
 function drawLeaf() {
   const t = tally(items);
   const left = t.todo + (t.steps - t.ticked);
-  setHtml(leaf, `${I.list}<span class="lt">Checklist</span><span class="lb" title="${left} left to answer">${left}</span>${t.no ? `<span class="lb no" title="${t.no} No">${t.no}</span>` : ''}${t.notes ? `<span class="lb nt" title="${t.notes} notes">${t.notes}</span>` : ''}`);
+  // Each number says what it counts under it: two equal numbers (31 No, 31 notes) are not read as one.
+  const badge = (cls, n, word, tip) => `<span class="lg" title="${tip}"><span class="lb${cls ? ' ' + cls : ''}">${n}</span><span class="ll">${word}</span></span>`;
+  setHtml(leaf, `${I.list}<span class="lt">Checklist</span>${badge('', left, 'left', `${left} left to answer`)}${t.no ? badge('no', t.no, 'No', `${t.no} No`) : ''}${t.notes ? badge('nt', t.notes, 'notes', `${t.notes} notes`) : ''}`);
   leaf.title = `${left} left · ${t.no} No · ${t.notes} notes. Open the progress panel; drag to move.`;
 }
 function setPanel(on) { ui.panel = on; $('#app').classList.toggle('panel-open', on); leaf.setAttribute('aria-expanded', String(on)); if (on) drawPanel(); saveUi(); }
@@ -784,7 +808,7 @@ function drawPanel() {
   const list = parts.filter(p => p.table).map(p => {
     const pt = tally(p.items);
     const l = pt.total - pt.answered;
-    return `<button class="pli" type="button" data-goto="${p.idx}"><span class="pn">${esc(p.num || '·')}</span><span class="pt2">${p.title || esc(doc.title)}</span><span class="pc">${l ? `${l} left` : '<span style="color:var(--yes)">all answered</span>'}${pt.no ? ` · <span class="no">${pt.no} No</span>` : ''}</span><span class="bar"><i style="width:${pct(pt.ticked + pt.yes, pt.total)}%"></i><i class="n" style="width:${pct(pt.no, pt.total)}%"></i></span></button>`;
+    return `<button class="pli" type="button" data-goto="${p.idx}"><span class="pn">${esc(p.num || '·')}</span><span class="pt2">${p.title || esc(doc.title)}</span><span class="pc" title="${tallyTitle(pt)}">${l ? tallyText(pt) : `<span style="color:var(--yes)">all answered</span>${pt.no ? ` · <span class="nos">${pt.no} No</span>` : ''}`}</span>${tallyBar(pt)}</button>`;
   }).join('');
   const body = $('#panel .pn-body');
   const keep = body ? body.scrollTop : 0;
@@ -831,7 +855,7 @@ $('#panel').addEventListener('click', e => {
   if (a === 'close') setPanel(false);
   if (a === 'pin') setPinned(!ui.pinned);
   if (a === 'rcolors') { colors = {}; saveColors(); }
-  if (a === 'next') { const it = nextWhere(x => x.state === 'none'); if (it) goTo(it.el, true); else toast('Nothing left to answer'); }
+  if (a === 'next') { const it = nextWhere(isLeft); if (it) goTo(it.el, true); else toast('Nothing left to answer'); }
   if (a === 'nextno') { const it = nextWhere(x => x.state === 'no'); if (it) goTo(it.el, true); }
   if (a === 'archive') vscode.postMessage({ type: 'archive' });
 });
