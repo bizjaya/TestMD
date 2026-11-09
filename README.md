@@ -13,9 +13,14 @@ to-do list. Any `- [ ]` list in a Markdown file works.
   checklist beside the editor, laid out like a small website:
   - **a header** with the checklist's title, where you are in it, Find, and how much is left;
   - **a contents menu** on the left that folds by section, with its own filter (words, or *Not done* / *With a No*).
+    A section shows how many of its tests are done (`0/3`); each test under it, how many of its rows are answered (`6/8`),
+    with a red dot when one is a No.
     **☰** hides it; drag its edge to widen or narrow it;
   - **a table per section** (each `##` heading): a row per test or sub-heading, its block labels (*Do*, *Look for*,
     *Pass when*) as sub-rows, and each step or check as a row with its answer in the last column:
+    - **every count reads the same way:** *answered of total*, then the No answers in red (`4 of 4 · 2 No`), and the bar
+      under it has the same three parts: green for Yes or done, red for No, grey for what is left. A section's header
+      shows its tests done on one line and its answers, with their bar, on the next;
     - a **tick** for each step you do,
     - **Yes / No** for each thing you check. **No** asks what went wrong, then writes it under the check with the date
       and your name;
@@ -25,7 +30,7 @@ to-do list. Any `- [ ]` list in a Markdown file works.
     test (Alt+click folds every test of its level in that section);
   - **Mark test done** on a test once every check under it is answered and none is No: its heading is struck through
     and gets a Done pill, and links to it (in a menu, a results table) follow the new anchor;
-  - **the CHECKLIST leaf** on the right edge, with what is left, the number of No answers and of notes. It opens a
+  - **the CHECKLIST leaf** on the right edge, with what is left, the number of No answers and of notes, each number labelled. It opens a
     panel: the totals, **Next to answer** and **Next No**, a filter (All, Left, No, Notes), every section with its
     progress, the **Auto / Light / Dark** switch, colours, and **Archive round**. Drag the leaf up or down; pin the
     panel beside the page or let it lie over it.

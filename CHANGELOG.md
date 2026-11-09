@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.3 (2026-11-09)
+
+- Every count reads the same way: *answered of total*, then the No answers in red, such as `4 of 4 · 2 No`. A *Do*,
+  *Look for* or *Pass when* row counts like its test (`4 of 5`, `2 of 2 · 1 No`) instead of `4 Yes of 5`.
+- Every bar shows exactly the words beside it: green for Yes or done, red for No, grey for what is left.
+- A section's header gives its tests done on one line and its answers on the next (`13 of 16 answered · 4 No`), with the
+  bar under the answers. Before, the bar counted answers while the words above it counted tests.
+- In the contents menu, each test under a section shows its own count (`6/8`), with the red dot when one is a No; a
+  section still shows its tests done (`0/3`). Pointing at any count says what it counts.
+- A box left empty under a test marked done counts as done, not as left to answer, and Next to answer skips it.
+- The CHECKLIST leaf names each number (left, No, notes), so equal numbers are not read as one.
+
 ## 0.2.2 (2026-11-06)
 
 - A copy button at the end of every part title, test title and step or check copies its number and words, such as
