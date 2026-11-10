@@ -266,6 +266,11 @@ function redrawItem(it) {
   const a = document.createElement('tbody');
   a.innerHTML = itemHtml(it) + noteRowHtml(it);
   const [row, nrow] = a.children;
+  // A row of the highlighted section stays highlighted when it is drawn again.
+  for (const [old, now] of [[it.el, row], [it.nel, nrow]]) {
+    const i = sectionRows.indexOf(old);
+    if (i >= 0) { sectionRows[i] = now; for (const c of ['sec-on', 'sec-first', 'sec-last']) if (old.classList.contains(c)) now.classList.add(c); }
+  }
   it.el.replaceWith(row); it.nel.replaceWith(nrow);
   it.el = row; it.nel = nrow;
 }
@@ -674,9 +679,28 @@ function spy() {
   if (tocActive.p !== tp) { if (tocActive.p) tocActive.p.classList.remove('active'); if (tp) tp.classList.add('active'); }
   if (tocActive.h !== th) { if (tocActive.h) tocActive.h.classList.remove('active'); if (th) th.classList.add('active'); }
   tocActive = { p: tp, h: th };
+  markSection(head);
   if (part && !ui.tocOpen[part.id || part.idx]) { ui.tocOpen[part.id || part.idx] = true; if (tp) tp.classList.add('open'); }
   const act = th || tp;
   if (act) { const toc = $('#toc'); const tr = toc.getBoundingClientRect(), ar = act.getBoundingClientRect(); if (ar.top < tr.top + 150 || ar.bottom > tr.bottom - 20) toc.scrollTop += ar.top - tr.top - tr.height / 3; }
+}
+/** The section the contents highlight, highlighted the same way on the page: the heading's row and every row under it,
+ * down to the next heading of its level or higher. */
+let sectionRows = [];
+function markSection(head) {
+  for (const el of sectionRows) el.classList.remove('sec-on', 'sec-first', 'sec-last');
+  sectionRows = [];
+  if (!head || !head.part) return;
+  const rows = head.part.rows; const at = rows.indexOf(head);
+  if (at < 0) return;
+  for (let i = at; i < rows.length; i++) {
+    const r = rows[i];
+    if (i > at && r.k === 'h' && r.level <= head.level) break;
+    if (r.el && !r.el.classList.contains('gone')) sectionRows.push(r.el);
+    if (r.nel) sectionRows.push(r.nel);
+  }
+  sectionRows.forEach(el => el.classList.add('sec-on'));
+  if (sectionRows.length) { sectionRows[0].classList.add('sec-first'); sectionRows[sectionRows.length - 1].classList.add('sec-last'); }
 }
 /** The row at the top of the page and how far down it sits, to come back to after a redraw. Starts at the part above
  * the one in view, so the rows of earlier parts are never measured. */

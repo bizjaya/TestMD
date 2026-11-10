@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.5 (2026-11-10)
+
+- The section the contents highlight is highlighted on the page as well: its heading row and every row under it, down
+  to the next heading of its level, take the same ground and edge as its line in the contents, whether you clicked it
+  there or scrolled to it. A row you answer stays highlighted.
+
 ## 0.2.4 (2026-11-09)
 
 - The contents menu shows each count as a percentage. A section reads how far through its tests you are, a test marked

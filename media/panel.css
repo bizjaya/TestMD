@@ -153,6 +153,9 @@ mark.tqm { background: var(--find); color: inherit; padding: 0; border-radius: 2
 .th .pill { font-size: 8.5px; padding: 0 5px; line-height: 1.6; }
 .th.active { color: var(--link); border-left-color: var(--link); background: var(--accent-soft); }
 .th.active .hn { color: var(--link); }
+/* The section the contents highlight, highlighted on the page too: the same ground and the same edge. */
+tr.sec-on > td, tr.sec-on > th { background: var(--accent-soft); }
+tr.sec-on > :first-child { box-shadow: inset 2px 0 0 var(--link); }
 
 /* ── A part: its header, what it is about, then its table ─────────────────────────────────────────────── */
 .part { margin: 0 0 40px; scroll-margin-top: 8px; }
