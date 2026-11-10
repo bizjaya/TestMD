@@ -2,7 +2,7 @@
   "name": "testmd",
   "displayName": "TestMD",
   "description": "Run Markdown checklists in VS Code: tick each step, answer Yes or No to each check, and write why it failed right under it, all saved in the .md.",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "publisher": "bizjaya",
   "license": "MIT",
   "author": "BizJaya TechLab S/B",
