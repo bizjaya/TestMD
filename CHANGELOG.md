@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.6 (2026-11-13)
+
+- The highlight follows your clicks only. Click a section in the contents, or anywhere in a section on the page, and
+  that section is highlighted in both places; scrolling no longer moves it to whatever reaches the top. A click on the
+  page also opens its part in the contents and brings its line into view. The highlight is kept when the page is
+  drawn again and when the panel is reopened. The breadcrumb above still names where you have scrolled to.
+
 ## 0.2.5 (2026-11-10)
 
 - The section the contents highlight is highlighted on the page as well: its heading row and every row under it, down
