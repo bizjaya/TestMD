@@ -30,7 +30,7 @@ const I = {
 // unsaved boxes, kept by the webview across redraws.
 const ui = { toc: true, panel: false, pinned: true, filter: 'all', foldDone: true, openNotes: false, leafTop: 0, tocOpen: {} };
 const saved = vscode.getState() || {};
-const view = { folded: saved.folded || {}, open: saved.open || {}, scroll: saved.scroll || null };
+const view = { folded: saved.folded || {}, open: saved.open || {}, scroll: saved.scroll || null, sel: saved.sel || null };
 const forms = {}; // item key -> { type: 'no' | 'note', text, pics: [{ src, data, ext, failed }] }
 let doc = null;   // the latest render message
 let themeSetting = 'auto';
@@ -43,7 +43,7 @@ const content = $('#content');
 const main = $('#main');
 const leaf = $('#leaf');
 
-function keepView() { clearTimeout(keepT); vscode.setState({ folded: view.folded, open: view.open, scroll: view.scroll }); }
+function keepView() { clearTimeout(keepT); vscode.setState({ folded: view.folded, open: view.open, scroll: view.scroll, sel: view.sel }); }
 // Scrolling only moves the kept place: write it once the scrolling stops, not on every frame.
 let keepT = 0;
 function keepViewSoon() { clearTimeout(keepT); keepT = setTimeout(keepView, 400); }
@@ -415,10 +415,17 @@ $('#tocTree').addEventListener('click', e => {
     const was = el.classList.contains('open');
     el.classList.toggle('open', !was); ui.tocOpen[p.id || p.idx] = !was;
     if (!was || !el.querySelector('.tp-kids')) goTo(p.el, false, true);
+    select(p, null, false);
     saveUi(); return;
   }
   const a = e.target.closest('a.th');
-  if (a) { e.preventDefault(); const h = allRows[+a.dataset.h]; if (h.folded) { h.folded = false; view.folded[h.id] = false; applyVisibility(); keepView(); } goTo(h.el, false, true); }
+  if (a) {
+    e.preventDefault();
+    const h = allRows[+a.dataset.h];
+    if (h.folded) { h.folded = false; view.folded[h.id] = false; applyVisibility(); keepView(); }
+    goTo(h.el, false, true);
+    select(h.part, h, false);
+  }
 });
 $('#tocFold').addEventListener('click', () => { ui.tocOpen = {}; $$('#tocTree .tp').forEach(el => el.classList.remove('open')); saveUi(); });
 
@@ -444,6 +451,8 @@ function applyVisibility() {
       if (r.k === 'i') r.nel.classList.toggle('gone', !(show && (!!r.form || r.open || (ui.openNotes && r.notes.length > 0))));
     });
   });
+  // Rows a fold or the filter brought back join the highlighted section again.
+  applySel();
 }
 function setFold(h, folded) { h.folded = folded; view.folded[h.id] = folded; }
 function foldPart(p, collapse) {
@@ -529,6 +538,7 @@ function addPictures(it, files) {
 
 // ── Events on the page ───────────────────────────────────────────────────────────────────────────────────────────
 content.addEventListener('click', e => {
+  pickAt(e.target);
   const fb = e.target.closest('[data-fold]');
   if (fb) {
     const collapse = fb.dataset.fold === 'collapse';
@@ -653,11 +663,11 @@ function nextWhere(pred) {
   return list.find(it => it.ix >= from) || list[0];
 }
 
-// ── Where you are: the crumbs, the contents highlight, the place kept across redraws ────────────────────────────────
-// On each scroll frame: read where the page is first, then write only what changed.
+// ── Where you are: the crumbs and the place kept across redraws ─────────────────────────────────────────────────────
+// On each scroll frame: read where the page is first, then write only what changed. Scrolling never moves the
+// highlight; only a click does (below).
 let spyQueued = false;
 let spyPart, spyHead;
-let tocActive = { p: null, h: null };
 main.addEventListener('scroll', () => { if (!spyQueued) { spyQueued = true; requestAnimationFrame(spy); } }, { passive: true });
 function spy() {
   spyQueued = false;
@@ -675,14 +685,51 @@ function spy() {
   if (part && part.title) crumbs.push(`<b>${part.num ? 'Part ' + esc(part.num) + ' · ' : ''}${part.title}</b>`);
   if (head) crumbs.push(`<span>${esc(head.num)} ${head.title}</span>`);
   setHtml($('#crumbs'), crumbs.join('<span class="sep">›</span>'));
+}
+
+// ── The highlight: the section you clicked, in the contents or on the page ─────────────────────────────────────────
+// It stays where you clicked while you scroll, and is kept across redraws and reopening the panel.
+let tocActive = { p: null, h: null };
+/** Highlight a part (no heading) or a heading's section, in the contents and on the page, and keep it. */
+function select(part, head, showInToc) {
+  view.sel = part ? { p: part.id || part.idx, h: head ? head.id || null : null, g: head ? head.gid : null } : null;
+  keepView();
+  paintSel(part, head, showInToc);
+}
+function paintSel(part, head, showInToc) {
   const tp = part ? part.tocEl : null, th = head ? head.tocEl : null;
   if (tocActive.p !== tp) { if (tocActive.p) tocActive.p.classList.remove('active'); if (tp) tp.classList.add('active'); }
   if (tocActive.h !== th) { if (tocActive.h) tocActive.h.classList.remove('active'); if (th) th.classList.add('active'); }
   tocActive = { p: tp, h: th };
   markSection(head);
-  if (part && !ui.tocOpen[part.id || part.idx]) { ui.tocOpen[part.id || part.idx] = true; if (tp) tp.classList.add('open'); }
+  if (!showInToc || !part) return;
+  // A click on the page opens its part in the contents and brings its line into view there.
+  if (!ui.tocOpen[part.id || part.idx]) { ui.tocOpen[part.id || part.idx] = true; if (tp) tp.classList.add('open'); saveUi(); }
   const act = th || tp;
-  if (act) { const toc = $('#toc'); const tr = toc.getBoundingClientRect(), ar = act.getBoundingClientRect(); if (ar.top < tr.top + 150 || ar.bottom > tr.bottom - 20) toc.scrollTop += ar.top - tr.top - tr.height / 3; }
+  if (!act) return;
+  const toc = $('#toc'); const tr = toc.getBoundingClientRect(), ar = act.getBoundingClientRect();
+  if (ar.top < tr.top + 150 || ar.bottom > tr.bottom - 20) toc.scrollTop += ar.top - tr.top - tr.height / 3;
+}
+/** Paint the kept highlight again once the page or the contents were drawn anew. */
+function applySel() {
+  const s = view.sel;
+  const part = s ? parts.find(p => (p.id || p.idx) === s.p) || null : null;
+  let head = null;
+  if (part && (s.h || s.g !== null)) head = part.heads.find(h => s.h ? h.id === s.h : h.gid === s.g) || null;
+  paintSel(part, head, false);
+}
+/** A click on the page highlights the section it falls in: the nearest heading the contents list, else its part. */
+function pickAt(target) {
+  const sec = target.closest('section.part');
+  if (!sec) return;
+  const part = parts[+sec.dataset.p];
+  if (!part) return;
+  const tr = target.closest('tr');
+  const r = tr ? allRows[+(tr.dataset.g ?? tr.dataset.n)] : null;
+  if (tr && !r) return; // a table's own header row
+  let head = r ? (r.k === 'h' ? r : r.head) : null;
+  while (head && !head.tocEl && head.parent) head = head.parent;
+  select(part, head, true);
 }
 /** The section the contents highlight, highlighted the same way on the page: the heading's row and every row under it,
  * down to the next heading of its level or higher. */
