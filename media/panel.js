@@ -60,48 +60,113 @@ function stamp(outline) {
   outline.parts.forEach(p => { p.sig = partSig(p); p.rows.forEach(r => { r.shape = shapeOf(r); r.sig = sigOf(r); }); });
 }
 const DATA = { h: ['id', 'title', 'done', 'pills', 'intro'], b: ['label'], i: ['html', 'state', 'notes'], p: ['html', 'outro'] };
-/** Patch the page in place from a new outline of the same shape. False when the shape differs. */
-function patch(outline) {
-  if (!parts.length || outline.parts.length !== parts.length) return false;
-  for (let i = 0; i < parts.length; i++) {
-    const a = parts[i], b = outline.parts[i];
-    if (a.sig !== b.sig || a.rows.length !== b.rows.length) return false;
-    for (let j = 0; j < a.rows.length; j++) if (a.rows[j].shape !== b.rows[j].shape || (!a.table && a.rows[j].sig !== b.rows[j].sig)) return false;
-  }
+/** A part on the page that a part of the new outline can update in place: the same part, the same rows in the same
+ * order (a prose part: the same words too). */
+function partMatch(a, b) {
+  if (a.sig !== b.sig || a.rows.length !== b.rows.length) return false;
+  for (let j = 0; j < a.rows.length; j++) if (a.rows[j].shape !== b.rows[j].shape || (!a.table && a.rows[j].sig !== b.rows[j].sig)) return false;
+  return true;
+}
+/** A part on the page takes its new lines, and its rows whose words changed take the new words; those rows are added to
+ * `dirty`, to be drawn again. True when a heading's words changed. */
+function mergePart(p, np, dirty) {
   let headsChanged = false;
-  parts.forEach((p, i) => {
-    const np = outline.parts[i];
-    p.line = np.line;
-    p.rows.forEach((r, j) => {
-      const n = np.rows[j];
-      if (n.line !== undefined) r.line = n.line;
-      if (n.sig === r.sig) return;
-      r.sig = n.sig;
-      if (r.k === 'h' && n.id !== r.id && r.id in view.folded) { view.folded[n.id] = view.folded[r.id]; delete view.folded[r.id]; keepView(); }
-      const doneNow = r.k === 'h' && n.done && !r.done;
-      for (const k of DATA[r.k]) r[k] = n[k];
-      // A test marked done outside the panel (by hand, by git) folds like one marked here, unless you folded it yourself.
-      if (doneNow && view.folded[r.id] === undefined) r.folded = ui.foldDone;
-      if (r.k === 'i') { if (r.el) redrawItem(r); return; }
-      if (r.k === 'h') { r.plain = plain(r.title); headsChanged = true; }
-      if (r.el && r.el.tagName === 'TR') {
-        const t = document.createElement('tbody');
-        t.innerHTML = rowHtml(r);
-        const row = t.firstElementChild;
-        r.el.replaceWith(row); r.el = row;
-        if (r.k === 'h') r.ansEl = row.querySelector('[data-hans]');
-        if (r.k === 'b') r.ansEl = row.querySelector('[data-bans]');
-      }
-    });
+  p.line = np.line;
+  p.rows.forEach((r, j) => {
+    const n = np.rows[j];
+    if (n.line !== undefined) r.line = n.line;
+    if (n.sig === r.sig) return;
+    r.sig = n.sig;
+    if (r.k === 'h' && n.id !== r.id && r.id in view.folded) { view.folded[n.id] = view.folded[r.id]; delete view.folded[r.id]; keepView(); }
+    const doneNow = r.k === 'h' && n.done && !r.done;
+    for (const k of DATA[r.k]) r[k] = n[k];
+    // A test marked done outside the panel (by hand, by git) folds like one marked here, unless you folded it yourself.
+    if (doneNow && view.folded[r.id] === undefined) r.folded = ui.foldDone;
+    if (r.k === 'h') { r.plain = plain(r.title); r.plainOf = r.title; headsChanged = true; }
+    dirty.push(r);
   });
-  if (headsChanged) { drawToc(); spyPart = spyHead = undefined; }
+  return headsChanged;
+}
+function redrawRow(r) {
+  if (r.k === 'i') { if (r.el) redrawItem(r); return; }
+  if (!r.el || r.el.tagName !== 'TR') return;
+  const t = document.createElement('tbody');
+  t.innerHTML = rowHtml(r);
+  const row = t.firstElementChild;
+  r.el.replaceWith(row); r.el = row;
+  if (r.k === 'h') r.ansEl = row.querySelector('[data-hans]');
+  if (r.k === 'b') r.ansEl = row.querySelector('[data-bans]');
+}
+/**
+ * Bring the page up to date from a new outline, drawing again only what changed. The parts at the start and at the end
+ * that still match are updated in place; the parts between them (added, removed or reshaped) are drawn anew. Folds,
+ * open notes, unsaved boxes, the highlight, Find and your place are kept. False when nothing matches: draw it all.
+ */
+function update(outline) {
+  const olds = parts, news = outline.parts;
+  if (!olds.length) return false;
+  let k = 0;
+  while (k < olds.length && k < news.length && partMatch(olds[k], news[k])) k++;
+  let s = 0;
+  while (s < olds.length - k && s < news.length - k && partMatch(olds[olds.length - 1 - s], news[news.length - 1 - s])) s++;
+  const gone = olds.slice(k, olds.length - s), added = news.slice(k, news.length - s);
+  const moved = gone.length > 0 || added.length > 0;
+  if (moved && k === 0 && s === 0) return false;
+  const anchor = moved ? anchorNow() : null;
+  const dirty = [];
+  let headsChanged = false;
+  for (let i = 0; i < k; i++) headsChanged = mergePart(olds[i], news[i], dirty) || headsChanged;
+  for (let i = 1; i <= s; i++) headsChanged = mergePart(olds[olds.length - i], news[news.length - i], dirty) || headsChanged;
+  if (moved || headsChanged) {
+    // Number every part and row again. Kept rows keep their elements, folds and open notes; new rows take theirs from
+    // what was kept for them (view, forms), as on a first draw.
+    const kept = [...olds.slice(0, k), ...olds.slice(olds.length - s)];
+    kept.forEach(p => { p.oldIdx = p.idx; p.rows.forEach(r => { r.oldGid = r.gid; r.oldKey = r.key; }); });
+    index([...olds.slice(0, k), ...added, ...olds.slice(olds.length - s)], new Set(added));
+    if (moved) {
+      const after = k > 0 ? olds[k - 1].el : content.querySelector('.docbar');
+      gone.forEach(p => p.el.remove());
+      after.insertAdjacentHTML('afterend', added.map(partHtml).join(''));
+      let el = after.nextElementSibling;
+      for (const p of added) { p.el = el; el = el.nextElementSibling; }
+      wire(added);
+    }
+    const redraw = new Set(dirty);
+    for (const p of kept) {
+      if (p.idx !== p.oldIdx) {
+        p.el.dataset.p = p.idx;
+        if (p.meterEl) p.meterEl.dataset.meter = p.idx;
+        p.el.querySelectorAll('.part-hd [data-fold]').forEach(b => { b.dataset.id = p.idx; });
+      }
+      for (const r of p.rows) {
+        if (r.k === 'i' && r.key !== r.oldKey) {
+          // An item without a number is known by its heading: marking that done renames it, and what was kept moves.
+          if (r.oldKey in view.open) { view.open[r.key] = view.open[r.oldKey]; delete view.open[r.oldKey]; keepView(); }
+          if (forms[r.oldKey]) { forms[r.key] = forms[r.oldKey]; delete forms[r.oldKey]; }
+          if (r.el && !redraw.has(r)) r.el.dataset.key = r.key;
+        }
+        if (r.gid === r.oldGid || redraw.has(r) || !r.el || r.el.tagName !== 'TR') continue;
+        r.el.dataset.g = r.gid;
+        if (r.ansEl) r.ansEl.dataset[r.k === 'h' ? 'hans' : 'bans'] = r.gid;
+        if (r.nel) { r.nel.dataset.n = r.gid; const f = r.nel.querySelector('[data-form]'); if (f) f.dataset.form = r.gid; }
+      }
+    }
+  }
+  dirty.forEach(redrawRow);
+  if (moved || headsChanged) { drawToc(); spyPart = spyHead = undefined; }
   refresh();
+  if (findState.q) runFind(false);
+  if (anchor) restoreAnchor(anchor);
+  spy();
   return true;
 }
 
 // ── The model: parts -> rows; headings, blocks and items wired to each other ────────────────────────────────────────
-function build(outline) {
-  parts = outline.parts; items = []; heads = []; blocks = []; allRows = [];
+/** Number and wire the parts and their rows. `fresh`: the parts drawn anew, whose folds, open notes and boxes come from
+ * what was kept for them; without it, every part. Other parts keep theirs. */
+function index(list, fresh) {
+  const isFresh = p => !fresh || fresh.has(p);
+  parts = list; items = []; heads = []; blocks = []; allRows = [];
   parts.forEach((p, pi) => {
     p.idx = pi;
     const stack = [];
@@ -132,10 +197,26 @@ function build(outline) {
     p.items = p.rows.filter(r => r.k === 'i');
     p.heads = p.rows.filter(r => r.k === 'h');
   });
-  heads.forEach(h => { h.group = h.kids.length > 0 && !h.items.some(it => it.head === h); h.plain = plain(h.title); });
-  parts.forEach(p => { p.plain = plain(p.title || (doc && doc.title) || ''); });
-  heads.forEach(h => { h.folded = view.folded[h.id] !== undefined ? view.folded[h.id] : (h.done && ui.foldDone); });
-  items.forEach(it => { it.open = !!view.open[it.key]; it.form = forms[it.key] || null; });
+  heads.forEach(h => {
+    h.group = h.kids.length > 0 && !h.items.some(it => it.head === h);
+    if (h.plainOf !== h.title) { h.plain = plain(h.title); h.plainOf = h.title; }
+  });
+  parts.forEach(p => { if (isFresh(p)) p.plain = plain(p.title || (doc && doc.title) || ''); });
+  heads.forEach(h => { if (isFresh(h.part)) h.folded = view.folded[h.id] !== undefined ? view.folded[h.id] : (h.done && ui.foldDone); });
+  items.forEach(it => { if (isFresh(it.part)) { it.open = !!view.open[it.key]; it.form = forms[it.key] || null; } });
+}
+const build = outline => index(outline.parts);
+/** Find the rows, note rows, counts and meters of parts just drawn: one pass over each part. */
+function wire(list) {
+  for (const p of list) {
+    p.el.querySelectorAll('tr[data-g]').forEach(tr => { allRows[+tr.dataset.g].el = tr; });
+    p.el.querySelectorAll('tr[data-n]').forEach(tr => { allRows[+tr.dataset.n].nel = tr; });
+    p.meterEl = p.el.querySelector('[data-meter]');
+  }
+  for (const p of list) {
+    p.heads.forEach(h => { if (!h.el && h.id) h.el = document.getElementById(h.id); h.ansEl = h.el && h.el.querySelector('[data-hans]'); });
+    p.rows.forEach(b => { if (b.k === 'b') b.ansEl = b.el && b.el.querySelector('[data-bans]'); });
+  }
 }
 const isTest = h => !h.group && (h.items.length > 0 || h.done);
 
@@ -274,14 +355,10 @@ function drawAll() {
   $('#docTitle').title = doc.title;
   content.innerHTML = `<div class="docbar"><span class="hint">Collapse shows one row per test. Alt+click a test's arrow to fold or open every test of its level in that part.</span>${foldBar('all', 0, 'every test in every part')}</div>`
     + parts.map(partHtml).join('');
-  // One pass over the page to find every row, instead of one search per row.
+  // One pass over each part to find its rows, instead of one search per row.
   allRows.forEach(r => { r.el = null; });
-  content.querySelectorAll('tr[data-g]').forEach(tr => { allRows[+tr.dataset.g].el = tr; });
-  content.querySelectorAll('tr[data-n]').forEach(tr => { allRows[+tr.dataset.n].nel = tr; });
   content.querySelectorAll('section[data-p]').forEach(s => { parts[+s.dataset.p].el = s; });
-  heads.forEach(h => { if (!h.el && h.id) h.el = document.getElementById(h.id); h.ansEl = h.el && h.el.querySelector('[data-hans]'); });
-  blocks.forEach(b => { b.ansEl = b.el && b.el.querySelector('[data-bans]'); });
-  parts.forEach(p => { p.meterEl = p.el.querySelector('[data-meter]'); });
+  wire(parts);
   spyPart = spyHead = undefined;
   drawToc();
   refresh();
@@ -1095,12 +1172,9 @@ window.addEventListener('message', ({ data: m }) => {
   doc = m; who = m.who || ''; today = m.today || '';
   items.forEach(it => { if (it.form) forms[it.key] = it.form; });
   stamp(m.outline);
-  if (!first && !titleChanged && patch(m.outline)) {
-    // Same rows as on the page: the changed ones were drawn again in place, nothing moved. The page's rows are the
-    // model now, so the message's own copy of every row is let go.
+  if (!first && !titleChanged && update(m.outline)) {
+    // Only what changed was drawn again. The page's parts are the model now, so the message's own copy is let go.
     doc = { ...m, outline: { title: m.outline.title, pictureMax: m.outline.pictureMax, parts: [] } };
-    if (findState.q) runFind(false);
-    spy();
     return;
   }
   const anchor = first ? view.scroll : anchorNow();
