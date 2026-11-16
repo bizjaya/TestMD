@@ -8,21 +8,18 @@ const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const plain = html => { const d = document.createElement('div'); d.innerHTML = html; return d.textContent || ''; };
 const MAX_SIDE = 1600;
+// markdown-it ends each block it closes with a line break, which the page never shows: on a long checklist that is
+// thousands of empty text nodes. Drawn without them, except where a line break could show (a <pre>, a <textarea>, a
+// style). The words copied by a copy button come from the text as written.
+const BLOCK_LF = /(<\/(?:p|li|ul|ol|blockquote|h[1-6]|table|thead|tbody|tr|th|td|div|dl|dt|dd)>|<(?:ul|ol|blockquote|table|thead|tbody|tr|li|dl)(?:\s[^>]*)?>|<hr\s*\/?>)\n+(?=<|$)/g;
+const tight = html => (/<pre|<textarea|white-space/i.test(html) ? html : html.replace(BLOCK_LF, '$1'));
 
+// One-off icons are inline SVG. The ones repeated on every row (chevron, copy, note, tick, block labels, picture
+// close, fold bar) are drawn by panel.css as masks on the element itself, so a row carries no SVG nodes.
 const I = {
-  chev: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>',
-  check: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
-  note: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z"/></svg>',
-  x: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
-  do: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="m8 12 3 3 5-6"/></svg>',
-  look: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>',
-  pass: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4h11l-1.5 4L16 12H5"/></svg>',
   pin: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6l-1 6 4 4H6l4-4-1-6ZM12 14v7"/></svg>',
   close: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
   list: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="m8 12 3 3 5-6"/></svg>',
-  collapse: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 4 5 5 5-5M7 20l5-5 5 5"/></svg>',
-  copy: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>',
-  expand: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 9 5-5 5 5M7 15l5 5 5-5"/></svg>',
 };
 
 // ── State ───────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -170,40 +167,67 @@ const tallyBar = (t, tag = 'span') => `<${tag} class="bar"><i style="width:${pct
 function copyBtn(num, text, part) {
   const words = plain(text).replace(/\s+/g, ' ').trim();
   const label = num ? `${part ? 'Part ' : ''}${num} - ${words}` : words;
-  return `<button class="cp" type="button" data-act="copy" data-copy="${esc(label)}" title="Copy: ${esc(label)}" aria-label="Copy the number and words">${I.copy}</button>`;
+  return `<button class="cp" type="button" data-act="copy" data-copy="${esc(label)}" title="Copy: ${esc(label)}" aria-label="Copy the number and words"></button>`;
 }
 function headTitle(h) {
   return `<span class="tt">${h.title}</span>${h.done ? '<span class="pill success">Done</span>' : ''}${h.pills ? ' ' + h.pills : ''}${h.group ? '' : copyBtn(h.num, h.title)}`;
 }
-function rowHtml(r) {
+// A row is drawn as its <tr> and its cells. A row hidden under a folded test or by the filter is only its empty <tr>
+// (its classes and numbers on it as always): its cells are drawn when it is shown, and taken out again when it is
+// hidden. While Find has marks on the page every row keeps its cells, so Find reads the whole checklist as it always has.
+function rowOpen(r) {
   const sub = r.rel > 0 ? ' sub' : '';
+  if (r.k === 'h') return `<tr class="r-h${sub}${r.group ? ' group' : ''}${r.done ? ' done' : ''}${r.folded ? ' folded' : ''}${r.body ? '' : ' empty'}" data-g="${r.gid}" id="${esc(r.id)}">`;
+  if (r.k === 'b') return `<tr class="r-b k-${r.kind}${/pass/i.test(r.label) ? ' pass' : ''}${sub}" data-g="${r.gid}">`;
+  if (r.k === 'i') return `<tr class="${itemClass(r)}" data-g="${r.gid}" data-key="${esc(r.key)}">`;
+  return `<tr class="r-p${r.outro ? ' outro' : ''}" data-g="${r.gid}">`;
+}
+function rowCells(r) {
   if (r.k === 'h') {
-    const cls = `r-h${sub}${r.group ? ' group' : ''}${r.done ? ' done' : ''}${r.folded ? ' folded' : ''}${r.body ? '' : ' empty'}`;
-    return `<tr class="${cls}" data-g="${r.gid}" id="${esc(r.id)}"><td class="c-num" data-act="fold"><div class="hnw"><button class="chev" type="button" data-act="fold" aria-label="Fold or open">${I.chev}</button><span>${esc(r.num)}</span></div></td>`
+    return `<td class="c-num" data-act="fold"><div class="hnw"><button class="chev" type="button" data-act="fold" aria-label="Fold or open"></button><span>${esc(r.num)}</span></div></td>`
       + `<td class="c-text" data-act="fold"><div class="h-title">${headTitle(r)}</div>${r.intro ? `<div class="h-intro">${r.intro}</div>` : ''}</td>`
-      + `<td class="c-ans" data-hans="${r.gid}"></td></tr>`;
+      + `<td class="c-ans" data-hans="${r.gid}"></td>`;
   }
   if (r.k === 'b') {
-    const pass = /pass/i.test(r.label) ? ' pass' : '';
-    const ico = r.kind === 'step' ? I.do : pass ? I.pass : I.look;
-    return `<tr class="r-b k-${r.kind}${pass}${sub}" data-g="${r.gid}"><td class="c-num">${esc(r.num)}</td><td class="c-text"><span class="bi">${ico}</span>${esc(r.label)}</td><td class="c-ans" data-bans="${r.gid}"></td></tr>`;
+    const ico = r.kind === 'step' ? 'do' : /pass/i.test(r.label) ? 'pass' : 'look';
+    return `<td class="c-num">${esc(r.num)}</td><td class="c-text"><span class="bi ${ico}"></span>${esc(r.label)}</td><td class="c-ans" data-bans="${r.gid}"></td>`;
   }
-  if (r.k === 'i') return itemHtml(r) + noteRowHtml(r);
-  return `<tr class="r-p${r.outro ? ' outro' : ''}" data-g="${r.gid}"><td></td><td colspan="2"><div class="md">${r.html}</div></td></tr>`;
+  if (r.k === 'i') return `<td class="c-num">${esc(r.num)}</td><td class="c-text">${tight(r.html)}${copyBtn(r.num, r.html)}</td><td class="c-ans">${ansHtml(r)}</td>`;
+  return `<td></td><td colspan="2"><div class="md">${tight(r.html)}</div></td>`;
+}
+/** The row (and an item's note row under it), with its cells or not, as it is shown now. */
+function rowHtml(r) {
+  const tr = `${rowOpen(r)}${hasCells(r) ? rowCells(r) : ''}</tr>`;
+  return r.k === 'i' ? tr + `<tr class="r-n${r.rel > 0 ? ' sub' : ''}" data-n="${r.gid}">${hasNoteCells(r) ? noteCells(r) : ''}</tr>` : tr;
 }
 const itemClass = it => `r-i s-${it.state} k-${it.kind}${it.rel > 0 ? ' sub' : ''}`;
-function itemHtml(it) {
-  return `<tr class="${itemClass(it)}" data-g="${it.gid}" data-key="${esc(it.key)}"><td class="c-num">${esc(it.num)}</td><td class="c-text">${it.html}${copyBtn(it.num, it.html)}</td><td class="c-ans">${ansHtml(it)}</td></tr>`;
-}
 function ansHtml(it) {
   const live = it.notes.filter(n => n.type !== 'old');
   const isNo = it.state === 'no';
-  const nb = `<button class="nb${live.length ? ' has' : ''}${isNo ? ' isno' : ''}${it.open || it.form ? ' open' : ''}" type="button" data-act="notes" title="${live.length ? 'Show or hide the notes' : 'Add a note or a picture'}" aria-expanded="${!!(it.open || it.form)}">${I.note}${live.length ? `<span>${live.length}</span>` : ''}</button>`;
-  if (it.kind === 'step') return `<span class="ans">${nb}<button class="tick${it.state === 'yes' ? ' on' : ''}" type="button" data-act="tick" aria-pressed="${it.state === 'yes'}" title="${it.state === 'yes' ? 'Done: click to undo' : 'Mark this step done'}">${I.check}</button></span>`;
+  const nb = `<button class="nb${live.length ? ' has' : ''}${isNo ? ' isno' : ''}${it.open || it.form ? ' open' : ''}" type="button" data-act="notes" title="${live.length ? 'Show or hide the notes' : 'Add a note or a picture'}" aria-expanded="${!!(it.open || it.form)}">${live.length ? `<span>${live.length}</span>` : ''}</button>`;
+  if (it.kind === 'step') return `<span class="ans">${nb}<button class="tick${it.state === 'yes' ? ' on' : ''}" type="button" data-act="tick" aria-pressed="${it.state === 'yes'}" title="${it.state === 'yes' ? 'Done: click to undo' : 'Mark this step done'}"></button></span>`;
   return `<span class="ans">${nb}<span class="yn"><button class="y${it.state === 'yes' ? ' on' : ''}" type="button" data-act="yes" aria-pressed="${it.state === 'yes'}">Yes</button><button class="n${isNo ? ' on' : ''}" type="button" data-act="no" aria-pressed="${isNo}">No</button></span></span>`;
 }
-function noteRowHtml(it) {
-  return `<tr class="r-n${it.rel > 0 ? ' sub' : ''}" data-n="${it.gid}"><td class="c-num"></td><td class="nc" colspan="2">${notesHtml(it)}</td></tr>`;
+const noteCells = it => `<td class="c-num"></td><td class="nc" colspan="2">${notesHtml(it)}</td>`;
+const findOn = () => findState.marks.length > 0;
+const hasCells = r => findOn() || rowShown(r);
+const hasNoteCells = it => findOn() || !!it.form || noteShown(it);
+/** Draw a row's cells (a heading's or a block's count in them too), or take them out. */
+function fillRow(r) {
+  r.el.innerHTML = rowCells(r);
+  if (r.k === 'h') { r.ansEl = r.el.querySelector('[data-hans]'); setHtml(r.ansEl, headAns(r)); }
+  if (r.k === 'b') { r.ansEl = r.el.querySelector('[data-bans]'); blockAns(r); }
+}
+function emptyRow(r) { r.el.textContent = ''; if (r.k === 'h' || r.k === 'b') r.ansEl = null; }
+/** Every row with its cells: for Find, and for a link to a place inside a folded test. */
+function fillAll() {
+  for (const p of parts) {
+    if (!p.table) continue;
+    for (const r of p.rows) {
+      if (r.el && !r.el.firstChild) fillRow(r);
+      if (r.k === 'i' && r.nel && !r.nel.firstChild) r.nel.innerHTML = noteCells(r);
+    }
+  }
 }
 function notesHtml(it) {
   const out = it.notes.map(n => {
@@ -217,12 +241,12 @@ function notesHtml(it) {
 function picHtml(p) {
   const saved = !p.pending;
   return `<span class="pic" role="button" tabindex="0" data-act="view" data-src="${esc(p.path)}" title="${esc(p.label)}: open"><img src="${esc(p.path)}" alt="${esc(p.label)}"><span class="pl">${esc(p.label)}</span>`
-    + `${saved ? `<button class="px" type="button" data-act="delpic" data-path="${esc(p.path)}" aria-label="Delete ${esc(p.label)}">${I.x}</button>` : ''}</span>`;
+    + `${saved ? `<button class="px" type="button" data-act="delpic" data-path="${esc(p.path)}" aria-label="Delete ${esc(p.label)}"></button>` : ''}</span>`;
 }
 function formHtml(it) {
   const f = it.form;
   const max = doc ? doc.outline.pictureMax : 0;
-  const pend = f.pics.map((p, i) => `<span class="pic${p.failed ? ' failed' : ''}" data-act="view" data-src="${esc(p.src)}">${p.src ? `<img src="${esc(p.src)}" alt="">` : '<span class="hint">reading…</span>'}<span class="pl">img${max + i + 1}</span><button class="px" type="button" data-act="leaveout" data-i="${i}" aria-label="Leave out">${I.x}</button></span>`).join('');
+  const pend = f.pics.map((p, i) => `<span class="pic${p.failed ? ' failed' : ''}" data-act="view" data-src="${esc(p.src)}">${p.src ? `<img src="${esc(p.src)}" alt="">` : '<span class="hint">reading…</span>'}<span class="pl">img${max + i + 1}</span><button class="px" type="button" data-act="leaveout" data-i="${i}" aria-label="Leave out"></button></span>`).join('');
   const isNo = f.type === 'no';
   return `<div class="form${isNo ? ' no' : ''}" data-form="${it.gid}"><textarea placeholder="${isNo ? 'What did you see instead?' : 'A note'} Paste or drop a screenshot here.">${esc(f.text)}</textarea>`
     + `<div class="pics">${pend}</div><div class="f-row"><button class="btn ${isNo ? 'save-no' : 'save-note'}" type="button" data-act="save">${isNo ? 'Save No' : 'Save note'}</button>`
@@ -230,17 +254,17 @@ function formHtml(it) {
 }
 function foldBar(scope, id, what) {
   return `<div class="foldbar" role="group" aria-label="Fold ${what}">`
-    + `<button type="button" data-fold="collapse" data-scope="${scope}" data-id="${id}" title="Collapse ${what}">${I.collapse}<span>Collapse${scope === 'all' ? ' all' : ''}</span></button>`
-    + `<button type="button" data-fold="expand" data-scope="${scope}" data-id="${id}" title="Expand ${what}">${I.expand}<span>Expand${scope === 'all' ? ' all' : ''}</span></button></div>`;
+    + `<button type="button" data-fold="collapse" data-scope="${scope}" data-id="${id}" title="Collapse ${what}"><span>Collapse${scope === 'all' ? ' all' : ''}</span></button>`
+    + `<button type="button" data-fold="expand" data-scope="${scope}" data-id="${id}" title="Expand ${what}"><span>Expand${scope === 'all' ? ' all' : ''}</span></button></div>`;
 }
 function partHtml(p) {
-  const cv = I.chev.replace('<svg', '<svg class="cv"');
+  const cv = '<span class="cv ic-chev"></span>';
   if (!p.table) {
-    const body = p.intro.join('') + p.rows.map(r => r.k === 'h' ? `<h3 id="${esc(r.id)}">${r.title}</h3>${r.intro ? `<p>${r.intro}</p>` : ''}` : r.k === 'p' ? r.html : '').join('');
+    const body = tight(p.intro.join('') + p.rows.map(r => r.k === 'h' ? `<h3 id="${esc(r.id)}">${r.title}</h3>${r.intro ? `<p>${r.intro}</p>` : ''}` : r.k === 'p' ? r.html : '').join(''));
     if (!p.title) return `<section class="part" id="${esc(p.id)}" data-p="${p.idx}"><div class="md">${body}</div></section>`;
     return `<section class="part" id="${esc(p.id)}" data-p="${p.idx}"><details class="prose"><summary>${cv}<h2>${p.num ? `Part ${esc(p.num)} · ` : ''}${p.title}</h2><span class="hint">Read</span></summary><div class="md">${body}</div></details></section>`;
   }
-  const about = p.intro.length ? `<details class="about"><summary>${cv}<b>About this part</b><span>${esc(plain(p.intro[0]).slice(0, 90))}…</span></summary><div class="md">${p.intro.join('')}</div></details>` : '';
+  const about = p.intro.length ? `<details class="about"><summary>${cv}<b>About this part</b><span>${esc(plain(p.intro[0]).slice(0, 90))}…</span></summary><div class="md">${tight(p.intro.join(''))}</div></details>` : '';
   const eyebrow = p.num ? 'Part ' + esc(p.num) : '';
   return `<section class="part" id="${esc(p.id)}" data-p="${p.idx}"><div class="part-hd"><div class="ph">${eyebrow ? `<div class="eyebrow">${eyebrow}</div>` : ''}<h2>${p.title || esc(doc.title)}${p.title ? copyBtn(p.num, p.title, true) : ''}</h2></div>${foldBar('p', p.idx, 'every test in this part')}<div class="meter" data-meter="${p.idx}"></div></div>${about}`
     + `<table class="grid"><colgroup><col class="c1"><col><col class="c3"></colgroup><thead><tr><th>#</th><th>Step</th><th>Answer</th></tr></thead><tbody>${p.rows.map(rowHtml).join('')}</tbody></table></section>`;
@@ -264,7 +288,7 @@ function drawAll() {
 }
 function redrawItem(it) {
   const a = document.createElement('tbody');
-  a.innerHTML = itemHtml(it) + noteRowHtml(it);
+  a.innerHTML = rowHtml(it);
   const [row, nrow] = a.children;
   // A row of the highlighted section stays highlighted when it is drawn again.
   for (const [old, now] of [[it.el, row], [it.nel, nrow]]) {
@@ -283,13 +307,14 @@ function headAns(h) {
   if (t.answered === t.total && t.no === 0 && !h.group) return '<button class="markdone" type="button" data-act="markdone">Mark test done</button>';
   return `<span class="prog" title="${tallyTitle(t)}"><span>${tallyText(t)}</span>${tallyBar(t)}</span>`;
 }
+function blockAns(b) {
+  if (!b.ansEl) return;
+  const t = tally(b.items);
+  setHtml(b.ansEl, `<span class="bt" title="${tallyTitle(t)}">${tallyText(t)}</span>`);
+}
 function refresh() {
   heads.forEach(h => setHtml(h.ansEl, headAns(h)));
-  blocks.forEach(b => {
-    if (!b.ansEl) return;
-    const t = tally(b.items);
-    setHtml(b.ansEl, `<span class="bt" title="${tallyTitle(t)}">${tallyText(t)}</span>`);
-  });
+  blocks.forEach(blockAns);
   parts.forEach(p => {
     if (!p.meterEl) return;
     const t = tally(p.items);
@@ -318,7 +343,7 @@ function drawToc() {
   $('#tocTree').innerHTML = parts.map(p => {
     const kids = p.heads.filter(h => h.rel <= 2).map(h => `<a class="th lv${h.rel}${h.done ? ' done' : ''}" href="#${esc(h.id)}" data-h="${h.gid}"><span class="hn">${esc(h.num)}</span><span class="ht">${esc(h.plain)}</span>${h.done ? '<span class="pill success">Done</span>' : '<span class="tc" data-tdot></span>'}</a>`).join('');
     const open = ui.tocOpen[p.id || p.idx] ? ' open' : '';
-    return `<div class="tp${open}" data-p="${p.idx}"><button class="tp-row" type="button" data-act="tpart">${kids ? `<span class="cv">${I.chev}</span>` : '<span class="cv" style="width:14px"></span>'}<span class="tn">${esc(p.num)}</span><span class="tt">${esc(p.plain)}</span><span class="tc" data-tc></span></button>${kids ? `<div class="tp-kids">${kids}</div>` : ''}</div>`;
+    return `<div class="tp${open}" data-p="${p.idx}"><button class="tp-row" type="button" data-act="tpart">${kids ? '<span class="cv ic-chev"></span>' : '<span class="cv" style="width:14px"></span>'}<span class="tn">${esc(p.num)}</span><span class="tt">${esc(p.plain)}</span><span class="tc" data-tc></span></button>${kids ? `<div class="tp-kids">${kids}</div>` : ''}</div>`;
   }).join('');
   parts.forEach(p => { p.tocEl = null; p.tocKids = []; });
   heads.forEach(h => { h.tocEl = null; });
@@ -433,22 +458,35 @@ $('#tocFold').addEventListener('click', () => { ui.tocOpen = {}; $$('#tocTree .t
 const match = it => ui.filter === 'all' || (ui.filter === 'todo' && isLeft(it)) || (ui.filter === 'no' && it.state === 'no')
   || (ui.filter === 'notes' && it.notes.some(n => n.type !== 'old'));
 function hiddenByFold(r) { for (let h = r.k === 'h' ? r.parent : r.head; h; h = h.parent) if (h.folded) return true; return false; }
+/** Is a row of a table shown: not under a folded test, and kept by the filter? */
+function rowShown(r) {
+  if (hiddenByFold(r)) return false;
+  if (ui.filter === 'all') return true;
+  if (r.k === 'h' || r.k === 'b') return r.items.some(match);
+  return r.k === 'i' && match(r);
+}
+const noteShown = it => rowShown(it) && (!!it.form || it.open || (ui.openNotes && it.notes.length > 0));
 function applyVisibility() {
   const filtering = ui.filter !== 'all';
+  const keep = findOn();
   parts.forEach(p => {
     if (!p.table) { p.el.hidden = filtering; return; }
     p.el.hidden = filtering && !p.items.some(match);
     p.rows.forEach(r => {
-      let show = !hiddenByFold(r);
-      if (show && filtering) {
-        if (r.k === 'h' || r.k === 'b') show = r.items.some(match);
-        else if (r.k === 'i') show = match(r);
-        else show = false;
-      }
+      const show = rowShown(r);
       const el = r.el;
-      if (el) el.classList.toggle('gone', !show);
+      if (el) {
+        el.classList.toggle('gone', !show);
+        if (show && !el.firstChild) fillRow(r);
+        else if (!show && !keep && el.firstChild) emptyRow(r);
+      }
       if (r.k === 'h' && el) el.classList.toggle('folded', !!r.folded);
-      if (r.k === 'i') r.nel.classList.toggle('gone', !(show && (!!r.form || r.open || (ui.openNotes && r.notes.length > 0))));
+      if (r.k === 'i') {
+        const on = noteShown(r);
+        r.nel.classList.toggle('gone', !on);
+        if (on && !r.nel.firstChild) r.nel.innerHTML = noteCells(r);
+        else if (!on && !keep && !r.form && r.nel.firstChild) r.nel.textContent = '';
+      }
     });
   });
   // Rows a fold or the filter brought back join the highlighted section again.
@@ -551,7 +589,12 @@ content.addEventListener('click', e => {
   if (link && !e.target.closest('[data-act="fold"] button')) {
     e.preventDefault();
     const href = link.getAttribute('href');
-    if (href.startsWith('#')) { const el = document.getElementById(decodeURIComponent(href.slice(1))); if (el) goTo(el, false, true); }
+    if (href.startsWith('#')) {
+      const id = decodeURIComponent(href.slice(1));
+      let el = document.getElementById(id);
+      if (!el) { fillAll(); el = document.getElementById(id); }
+      if (el) goTo(el, false, true);
+    }
     else vscode.postMessage({ type: 'open', href });
     return;
   }
@@ -972,6 +1015,7 @@ function runFind(jump) {
   const q = findState.q;
   const fc = $('#findCount');
   if (q.length < 2) { fc.textContent = ''; fc.className = 'fc'; return; }
+  fillAll();
   const needle = findState.matchCase ? q : q.toLowerCase();
   const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT, {
     acceptNode: n => n.parentElement.closest('button, textarea, .c-ans, .meter, summary span, .docbar') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
