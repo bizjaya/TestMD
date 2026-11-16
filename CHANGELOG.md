@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.7 (2026-11-16)
+
+- Big checklists open, scroll and update much faster, and use far less memory. Nothing changes in how the panel looks
+  or works. The numbers below are for a checklist of about 2,400 rows.
+- A change to the file made anywhere else (another tool, git, your own typing) re-reads only the part of the file it
+  falls in: about 15 ms of the editor's time instead of 100 to 200 ms. The editor's time is shared by every extension
+  in the window, so the whole window stays responsive.
+- An answer costs the editor about 15 ms instead of about 300 ms: it reads only the part of the file around the
+  answered line, and saving it no longer draws the checklist a second time.
+- The panel draws again only the parts a change touched, instead of the whole page whenever a row was added or
+  removed anywhere: about 15 ms instead of over 200 ms, with folds, open notes, unsaved boxes, the highlight, Find and
+  your place kept as before.
+- Parts far from the screen are laid out only as you scroll near them, so the panel opens in about half the time, and
+  Expand all, Find and clearing Find are faster.
+- Rows under a folded test hold nothing until they are shown, and the icons on each row are drawn by the stylesheet
+  instead of a picture per row: the page holds about 39,000 elements instead of 69,000.
+
 ## 0.2.6 (2026-11-13)
 
 - The highlight follows your clicks only. Click a section in the contents, or anywhere in a section on the page, and
