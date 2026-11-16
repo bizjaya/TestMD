@@ -2,7 +2,8 @@
 import MarkdownIt from 'markdown-it';
 import type Token from 'markdown-it/lib/token.mjs';
 import { createRenderer, ItemKind, ItemState } from './markdown';
-import { headingSlugs } from './slug';
+import { chunkText, knownChunkAt, splitLines } from './chunks';
+import { headingSlugs, headingTexts, inlinePlain, slugList } from './slug';
 
 export interface Item { line: number; end: number; kind: ItemKind; state: ItemState; }
 export interface Section { line: number; level: number; title: string; done: boolean; items: Item[]; }
@@ -25,10 +26,22 @@ const eolOf = (text: string) => (text.includes('\r\n') ? '\r\n' : '\n');
 
 function attr(t: Token, name: string): string | null { return t.attrGet(name); }
 
+// One renderer per set of step labels, made once: making one is not free, and a checklist is read on every change.
+const renderers = new Map<string, MarkdownIt>();
+function renderer(stepLabels: string[]): MarkdownIt {
+  const key = JSON.stringify(stepLabels);
+  let md = renderers.get(key);
+  if (!md) {
+    md = createRenderer({ interactive: true, stepLabels: [...stepLabels] });
+    if (renderers.size >= 4) renderers.clear();
+    renderers.set(key, md);
+  }
+  return md;
+}
+
 /** Read the checklist: its items (with kind and state) and the headings that hold them. */
 export function readChecklist(text: string, stepLabels: string[]): Checklist {
-  const md = createRenderer({ interactive: true, stepLabels });
-  const tokens = md.parse(text, {});
+  const tokens = renderer(stepLabels).parse(text, {});
   const items: Item[] = [];
   const sections: Section[] = [];
   for (let i = 0; i < tokens.length; i++) {
@@ -81,11 +94,21 @@ function addedLines(indent: string, head: string, a: Answer): string[] {
   return [`${indent}- ${head} · ${a.date} · ${a.who}${first ? ` — ${first}` : ''}`, ...rest.map(r => `${indent}  ${r}`), ...pictures];
 }
 
+/** The item on a line. When the outline has already cut this text into pieces, only the piece holding the line is
+ * read: an item's lines depend on nothing outside its piece. Otherwise the whole text is read. */
+function itemAt(text: string, line: number, stepLabels: string[]): Item | undefined {
+  const lines = splitLines(text);
+  const span = knownChunkAt(text, line, lines.length);
+  if (!span) return readChecklist(text, stepLabels).items.find(it => it.line === line);
+  const found = readChecklist(chunkText(lines, span.start, span.end), stepLabels).items.find(it => it.line === line - span.start);
+  return found && { ...found, line: found.line + span.start, end: found.end + span.start };
+}
+
 /** Apply one answer. Throws when the line is no longer a checklist item (the file changed under the panel). */
 export function applyAnswer(text: string, a: Answer, stepLabels: string[]): string {
   const eol = eolOf(text);
   const lines = text.split(/\r?\n/);
-  const item = readChecklist(text, stepLabels).items.find(it => it.line === a.line);
+  const item = itemAt(text, a.line, stepLabels);
   const m = BOX_LINE.exec(lines[a.line] ?? '');
   if (!item || !m) throw new Error('This checklist changed while you were answering; it has been reloaded.');
   const setBox = (on: boolean) => { lines[a.line] = lines[a.line].replace(BOX_LINE, `$1[${on ? 'x' : ' '}]`); };
@@ -118,11 +141,23 @@ export function markDone(text: string, headingLine: number): string {
   const m = /^(#{1,6})\s+(.*?)\s*$/.exec(lines[headingLine] ?? '');
   if (!m) throw new Error('That heading moved; the checklist has been reloaded.');
   if (/^~~/.test(m[2])) return text;
-  const before = headingSlugs(plainMd.parse(text, {}));
-  const index = plainMd.parse(text, {}).filter(t => t.type === 'heading_open' && t.map).findIndex(t => t.map![0] === headingLine);
-  lines[headingLine] = `${m[1]} ~~${m[2].replace(/\s+—\s+done$/i, '')}~~ ${DONE_PILL}`;
+  const env: { references?: unknown } = {};
+  const tokens = plainMd.parse(text, env);
+  const texts = headingTexts(tokens);
+  const before = slugList(texts);
+  const index = tokens.filter(t => t.type === 'heading_open' && t.map).findIndex(t => t.map![0] === headingLine);
+  const line = `${m[1]} ~~${m[2].replace(/\s+—\s+done$/i, '')}~~ ${DONE_PILL}`;
+  lines[headingLine] = line;
   let out = lines.join(eol);
-  const after = headingSlugs(plainMd.parse(out, {}));
+  // Only this heading's text changed, so the slugs after the change are the same list with its text replaced, read
+  // from the new line alone. A "|" in it (it might now head a table) or a lone carriage return (lines counted two ways)
+  // reads the whole new text instead.
+  let after: string[] = [];
+  if (index >= 0 && (line.includes('|') || /\r(?!\n)/.test(text))) after = headingSlugs(plainMd.parse(out, {}));
+  else if (index >= 0) {
+    const own = plainMd.parse(line, { ...env });
+    after = slugList(texts.map((t, i) => (i === index ? inlinePlain(own[1]).trim() : t)));
+  }
   const oldSlug = before[index], newSlug = after[index];
   if (index >= 0 && oldSlug && newSlug && oldSlug !== newSlug) {
     const esc = oldSlug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

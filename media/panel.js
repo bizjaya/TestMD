@@ -8,21 +8,18 @@ const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const plain = html => { const d = document.createElement('div'); d.innerHTML = html; return d.textContent || ''; };
 const MAX_SIDE = 1600;
+// markdown-it ends each block it closes with a line break, which the page never shows: on a long checklist that is
+// thousands of empty text nodes. Drawn without them, except where a line break could show (a <pre>, a <textarea>, a
+// style). The words copied by a copy button come from the text as written.
+const BLOCK_LF = /(<\/(?:p|li|ul|ol|blockquote|h[1-6]|table|thead|tbody|tr|th|td|div|dl|dt|dd)>|<(?:ul|ol|blockquote|table|thead|tbody|tr|li|dl)(?:\s[^>]*)?>|<hr\s*\/?>)\n+(?=<|$)/g;
+const tight = html => (/<pre|<textarea|white-space/i.test(html) ? html : html.replace(BLOCK_LF, '$1'));
 
+// One-off icons are inline SVG. The ones repeated on every row (chevron, copy, note, tick, block labels, picture
+// close, fold bar) are drawn by panel.css as masks on the element itself, so a row carries no SVG nodes.
 const I = {
-  chev: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>',
-  check: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
-  note: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z"/></svg>',
-  x: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
-  do: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="m8 12 3 3 5-6"/></svg>',
-  look: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>',
-  pass: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4h11l-1.5 4L16 12H5"/></svg>',
   pin: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6l-1 6 4 4H6l4-4-1-6ZM12 14v7"/></svg>',
   close: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
   list: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="m8 12 3 3 5-6"/></svg>',
-  collapse: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 4 5 5 5-5M7 20l5-5 5 5"/></svg>',
-  copy: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>',
-  expand: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 9 5-5 5 5M7 15l5 5 5-5"/></svg>',
 };
 
 // ── State ───────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -63,48 +60,113 @@ function stamp(outline) {
   outline.parts.forEach(p => { p.sig = partSig(p); p.rows.forEach(r => { r.shape = shapeOf(r); r.sig = sigOf(r); }); });
 }
 const DATA = { h: ['id', 'title', 'done', 'pills', 'intro'], b: ['label'], i: ['html', 'state', 'notes'], p: ['html', 'outro'] };
-/** Patch the page in place from a new outline of the same shape. False when the shape differs. */
-function patch(outline) {
-  if (!parts.length || outline.parts.length !== parts.length) return false;
-  for (let i = 0; i < parts.length; i++) {
-    const a = parts[i], b = outline.parts[i];
-    if (a.sig !== b.sig || a.rows.length !== b.rows.length) return false;
-    for (let j = 0; j < a.rows.length; j++) if (a.rows[j].shape !== b.rows[j].shape || (!a.table && a.rows[j].sig !== b.rows[j].sig)) return false;
-  }
+/** A part on the page that a part of the new outline can update in place: the same part, the same rows in the same
+ * order (a prose part: the same words too). */
+function partMatch(a, b) {
+  if (a.sig !== b.sig || a.rows.length !== b.rows.length) return false;
+  for (let j = 0; j < a.rows.length; j++) if (a.rows[j].shape !== b.rows[j].shape || (!a.table && a.rows[j].sig !== b.rows[j].sig)) return false;
+  return true;
+}
+/** A part on the page takes its new lines, and its rows whose words changed take the new words; those rows are added to
+ * `dirty`, to be drawn again. True when a heading's words changed. */
+function mergePart(p, np, dirty) {
   let headsChanged = false;
-  parts.forEach((p, i) => {
-    const np = outline.parts[i];
-    p.line = np.line;
-    p.rows.forEach((r, j) => {
-      const n = np.rows[j];
-      if (n.line !== undefined) r.line = n.line;
-      if (n.sig === r.sig) return;
-      r.sig = n.sig;
-      if (r.k === 'h' && n.id !== r.id && r.id in view.folded) { view.folded[n.id] = view.folded[r.id]; delete view.folded[r.id]; keepView(); }
-      const doneNow = r.k === 'h' && n.done && !r.done;
-      for (const k of DATA[r.k]) r[k] = n[k];
-      // A test marked done outside the panel (by hand, by git) folds like one marked here, unless you folded it yourself.
-      if (doneNow && view.folded[r.id] === undefined) r.folded = ui.foldDone;
-      if (r.k === 'i') { if (r.el) redrawItem(r); return; }
-      if (r.k === 'h') { r.plain = plain(r.title); headsChanged = true; }
-      if (r.el && r.el.tagName === 'TR') {
-        const t = document.createElement('tbody');
-        t.innerHTML = rowHtml(r);
-        const row = t.firstElementChild;
-        r.el.replaceWith(row); r.el = row;
-        if (r.k === 'h') r.ansEl = row.querySelector('[data-hans]');
-        if (r.k === 'b') r.ansEl = row.querySelector('[data-bans]');
-      }
-    });
+  p.line = np.line;
+  p.rows.forEach((r, j) => {
+    const n = np.rows[j];
+    if (n.line !== undefined) r.line = n.line;
+    if (n.sig === r.sig) return;
+    r.sig = n.sig;
+    if (r.k === 'h' && n.id !== r.id && r.id in view.folded) { view.folded[n.id] = view.folded[r.id]; delete view.folded[r.id]; keepView(); }
+    const doneNow = r.k === 'h' && n.done && !r.done;
+    for (const k of DATA[r.k]) r[k] = n[k];
+    // A test marked done outside the panel (by hand, by git) folds like one marked here, unless you folded it yourself.
+    if (doneNow && view.folded[r.id] === undefined) r.folded = ui.foldDone;
+    if (r.k === 'h') { r.plain = plain(r.title); r.plainOf = r.title; headsChanged = true; }
+    dirty.push(r);
   });
-  if (headsChanged) { drawToc(); spyPart = spyHead = undefined; }
+  return headsChanged;
+}
+function redrawRow(r) {
+  if (r.k === 'i') { if (r.el) redrawItem(r); return; }
+  if (!r.el || r.el.tagName !== 'TR') return;
+  const t = document.createElement('tbody');
+  t.innerHTML = rowHtml(r);
+  const row = t.firstElementChild;
+  r.el.replaceWith(row); r.el = row;
+  if (r.k === 'h') r.ansEl = row.querySelector('[data-hans]');
+  if (r.k === 'b') r.ansEl = row.querySelector('[data-bans]');
+}
+/**
+ * Bring the page up to date from a new outline, drawing again only what changed. The parts at the start and at the end
+ * that still match are updated in place; the parts between them (added, removed or reshaped) are drawn anew. Folds,
+ * open notes, unsaved boxes, the highlight, Find and your place are kept. False when nothing matches: draw it all.
+ */
+function update(outline) {
+  const olds = parts, news = outline.parts;
+  if (!olds.length) return false;
+  let k = 0;
+  while (k < olds.length && k < news.length && partMatch(olds[k], news[k])) k++;
+  let s = 0;
+  while (s < olds.length - k && s < news.length - k && partMatch(olds[olds.length - 1 - s], news[news.length - 1 - s])) s++;
+  const gone = olds.slice(k, olds.length - s), added = news.slice(k, news.length - s);
+  const moved = gone.length > 0 || added.length > 0;
+  if (moved && k === 0 && s === 0) return false;
+  const anchor = moved ? anchorNow() : null;
+  const dirty = [];
+  let headsChanged = false;
+  for (let i = 0; i < k; i++) headsChanged = mergePart(olds[i], news[i], dirty) || headsChanged;
+  for (let i = 1; i <= s; i++) headsChanged = mergePart(olds[olds.length - i], news[news.length - i], dirty) || headsChanged;
+  if (moved || headsChanged) {
+    // Number every part and row again. Kept rows keep their elements, folds and open notes; new rows take theirs from
+    // what was kept for them (view, forms), as on a first draw.
+    const kept = [...olds.slice(0, k), ...olds.slice(olds.length - s)];
+    kept.forEach(p => { p.oldIdx = p.idx; p.rows.forEach(r => { r.oldGid = r.gid; r.oldKey = r.key; }); });
+    index([...olds.slice(0, k), ...added, ...olds.slice(olds.length - s)], new Set(added));
+    if (moved) {
+      const after = k > 0 ? olds[k - 1].el : content.querySelector('.docbar');
+      gone.forEach(p => p.el.remove());
+      after.insertAdjacentHTML('afterend', added.map(partHtml).join(''));
+      let el = after.nextElementSibling;
+      for (const p of added) { p.el = el; el = el.nextElementSibling; }
+      wire(added);
+    }
+    const redraw = new Set(dirty);
+    for (const p of kept) {
+      if (p.idx !== p.oldIdx) {
+        p.el.dataset.p = p.idx;
+        if (p.meterEl) p.meterEl.dataset.meter = p.idx;
+        p.el.querySelectorAll('.part-hd [data-fold]').forEach(b => { b.dataset.id = p.idx; });
+      }
+      for (const r of p.rows) {
+        if (r.k === 'i' && r.key !== r.oldKey) {
+          // An item without a number is known by its heading: marking that done renames it, and what was kept moves.
+          if (r.oldKey in view.open) { view.open[r.key] = view.open[r.oldKey]; delete view.open[r.oldKey]; keepView(); }
+          if (forms[r.oldKey]) { forms[r.key] = forms[r.oldKey]; delete forms[r.oldKey]; }
+          if (r.el && !redraw.has(r)) r.el.dataset.key = r.key;
+        }
+        if (r.gid === r.oldGid || redraw.has(r) || !r.el || r.el.tagName !== 'TR') continue;
+        r.el.dataset.g = r.gid;
+        if (r.ansEl) r.ansEl.dataset[r.k === 'h' ? 'hans' : 'bans'] = r.gid;
+        if (r.nel) { r.nel.dataset.n = r.gid; const f = r.nel.querySelector('[data-form]'); if (f) f.dataset.form = r.gid; }
+      }
+    }
+  }
+  dirty.forEach(redrawRow);
+  if (moved || headsChanged) { drawToc(); spyPart = spyHead = undefined; }
   refresh();
+  if (findState.q) runFind(false);
+  if (anchor) restoreAnchor(anchor);
+  spy();
   return true;
 }
 
 // ── The model: parts -> rows; headings, blocks and items wired to each other ────────────────────────────────────────
-function build(outline) {
-  parts = outline.parts; items = []; heads = []; blocks = []; allRows = [];
+/** Number and wire the parts and their rows. `fresh`: the parts drawn anew, whose folds, open notes and boxes come from
+ * what was kept for them; without it, every part. Other parts keep theirs. */
+function index(list, fresh) {
+  const isFresh = p => !fresh || fresh.has(p);
+  parts = list; items = []; heads = []; blocks = []; allRows = [];
   parts.forEach((p, pi) => {
     p.idx = pi;
     const stack = [];
@@ -135,10 +197,26 @@ function build(outline) {
     p.items = p.rows.filter(r => r.k === 'i');
     p.heads = p.rows.filter(r => r.k === 'h');
   });
-  heads.forEach(h => { h.group = h.kids.length > 0 && !h.items.some(it => it.head === h); h.plain = plain(h.title); });
-  parts.forEach(p => { p.plain = plain(p.title || (doc && doc.title) || ''); });
-  heads.forEach(h => { h.folded = view.folded[h.id] !== undefined ? view.folded[h.id] : (h.done && ui.foldDone); });
-  items.forEach(it => { it.open = !!view.open[it.key]; it.form = forms[it.key] || null; });
+  heads.forEach(h => {
+    h.group = h.kids.length > 0 && !h.items.some(it => it.head === h);
+    if (h.plainOf !== h.title) { h.plain = plain(h.title); h.plainOf = h.title; }
+  });
+  parts.forEach(p => { if (isFresh(p)) p.plain = plain(p.title || (doc && doc.title) || ''); });
+  heads.forEach(h => { if (isFresh(h.part)) h.folded = view.folded[h.id] !== undefined ? view.folded[h.id] : (h.done && ui.foldDone); });
+  items.forEach(it => { if (isFresh(it.part)) { it.open = !!view.open[it.key]; it.form = forms[it.key] || null; } });
+}
+const build = outline => index(outline.parts);
+/** Find the rows, note rows, counts and meters of parts just drawn: one pass over each part. */
+function wire(list) {
+  for (const p of list) {
+    p.el.querySelectorAll('tr[data-g]').forEach(tr => { allRows[+tr.dataset.g].el = tr; });
+    p.el.querySelectorAll('tr[data-n]').forEach(tr => { allRows[+tr.dataset.n].nel = tr; });
+    p.meterEl = p.el.querySelector('[data-meter]');
+  }
+  for (const p of list) {
+    p.heads.forEach(h => { if (!h.el && h.id) h.el = document.getElementById(h.id); h.ansEl = h.el && h.el.querySelector('[data-hans]'); });
+    p.rows.forEach(b => { if (b.k === 'b') b.ansEl = b.el && b.el.querySelector('[data-bans]'); });
+  }
 }
 const isTest = h => !h.group && (h.items.length > 0 || h.done);
 
@@ -170,40 +248,67 @@ const tallyBar = (t, tag = 'span') => `<${tag} class="bar"><i style="width:${pct
 function copyBtn(num, text, part) {
   const words = plain(text).replace(/\s+/g, ' ').trim();
   const label = num ? `${part ? 'Part ' : ''}${num} - ${words}` : words;
-  return `<button class="cp" type="button" data-act="copy" data-copy="${esc(label)}" title="Copy: ${esc(label)}" aria-label="Copy the number and words">${I.copy}</button>`;
+  return `<button class="cp" type="button" data-act="copy" data-copy="${esc(label)}" title="Copy: ${esc(label)}" aria-label="Copy the number and words"></button>`;
 }
 function headTitle(h) {
   return `<span class="tt">${h.title}</span>${h.done ? '<span class="pill success">Done</span>' : ''}${h.pills ? ' ' + h.pills : ''}${h.group ? '' : copyBtn(h.num, h.title)}`;
 }
-function rowHtml(r) {
+// A row is drawn as its <tr> and its cells. A row hidden under a folded test or by the filter is only its empty <tr>
+// (its classes and numbers on it as always): its cells are drawn when it is shown, and taken out again when it is
+// hidden. While Find has marks on the page every row keeps its cells, so Find reads the whole checklist as it always has.
+function rowOpen(r) {
   const sub = r.rel > 0 ? ' sub' : '';
+  if (r.k === 'h') return `<tr class="r-h${sub}${r.group ? ' group' : ''}${r.done ? ' done' : ''}${r.folded ? ' folded' : ''}${r.body ? '' : ' empty'}" data-g="${r.gid}" id="${esc(r.id)}">`;
+  if (r.k === 'b') return `<tr class="r-b k-${r.kind}${/pass/i.test(r.label) ? ' pass' : ''}${sub}" data-g="${r.gid}">`;
+  if (r.k === 'i') return `<tr class="${itemClass(r)}" data-g="${r.gid}" data-key="${esc(r.key)}">`;
+  return `<tr class="r-p${r.outro ? ' outro' : ''}" data-g="${r.gid}">`;
+}
+function rowCells(r) {
   if (r.k === 'h') {
-    const cls = `r-h${sub}${r.group ? ' group' : ''}${r.done ? ' done' : ''}${r.folded ? ' folded' : ''}${r.body ? '' : ' empty'}`;
-    return `<tr class="${cls}" data-g="${r.gid}" id="${esc(r.id)}"><td class="c-num" data-act="fold"><div class="hnw"><button class="chev" type="button" data-act="fold" aria-label="Fold or open">${I.chev}</button><span>${esc(r.num)}</span></div></td>`
+    return `<td class="c-num" data-act="fold"><div class="hnw"><button class="chev" type="button" data-act="fold" aria-label="Fold or open"></button><span>${esc(r.num)}</span></div></td>`
       + `<td class="c-text" data-act="fold"><div class="h-title">${headTitle(r)}</div>${r.intro ? `<div class="h-intro">${r.intro}</div>` : ''}</td>`
-      + `<td class="c-ans" data-hans="${r.gid}"></td></tr>`;
+      + `<td class="c-ans" data-hans="${r.gid}"></td>`;
   }
   if (r.k === 'b') {
-    const pass = /pass/i.test(r.label) ? ' pass' : '';
-    const ico = r.kind === 'step' ? I.do : pass ? I.pass : I.look;
-    return `<tr class="r-b k-${r.kind}${pass}${sub}" data-g="${r.gid}"><td class="c-num">${esc(r.num)}</td><td class="c-text"><span class="bi">${ico}</span>${esc(r.label)}</td><td class="c-ans" data-bans="${r.gid}"></td></tr>`;
+    const ico = r.kind === 'step' ? 'do' : /pass/i.test(r.label) ? 'pass' : 'look';
+    return `<td class="c-num">${esc(r.num)}</td><td class="c-text"><span class="bi ${ico}"></span>${esc(r.label)}</td><td class="c-ans" data-bans="${r.gid}"></td>`;
   }
-  if (r.k === 'i') return itemHtml(r) + noteRowHtml(r);
-  return `<tr class="r-p${r.outro ? ' outro' : ''}" data-g="${r.gid}"><td></td><td colspan="2"><div class="md">${r.html}</div></td></tr>`;
+  if (r.k === 'i') return `<td class="c-num">${esc(r.num)}</td><td class="c-text">${tight(r.html)}${copyBtn(r.num, r.html)}</td><td class="c-ans">${ansHtml(r)}</td>`;
+  return `<td></td><td colspan="2"><div class="md">${tight(r.html)}</div></td>`;
+}
+/** The row (and an item's note row under it), with its cells or not, as it is shown now. */
+function rowHtml(r) {
+  const tr = `${rowOpen(r)}${hasCells(r) ? rowCells(r) : ''}</tr>`;
+  return r.k === 'i' ? tr + `<tr class="r-n${r.rel > 0 ? ' sub' : ''}" data-n="${r.gid}">${hasNoteCells(r) ? noteCells(r) : ''}</tr>` : tr;
 }
 const itemClass = it => `r-i s-${it.state} k-${it.kind}${it.rel > 0 ? ' sub' : ''}`;
-function itemHtml(it) {
-  return `<tr class="${itemClass(it)}" data-g="${it.gid}" data-key="${esc(it.key)}"><td class="c-num">${esc(it.num)}</td><td class="c-text">${it.html}${copyBtn(it.num, it.html)}</td><td class="c-ans">${ansHtml(it)}</td></tr>`;
-}
 function ansHtml(it) {
   const live = it.notes.filter(n => n.type !== 'old');
   const isNo = it.state === 'no';
-  const nb = `<button class="nb${live.length ? ' has' : ''}${isNo ? ' isno' : ''}${it.open || it.form ? ' open' : ''}" type="button" data-act="notes" title="${live.length ? 'Show or hide the notes' : 'Add a note or a picture'}" aria-expanded="${!!(it.open || it.form)}">${I.note}${live.length ? `<span>${live.length}</span>` : ''}</button>`;
-  if (it.kind === 'step') return `<span class="ans">${nb}<button class="tick${it.state === 'yes' ? ' on' : ''}" type="button" data-act="tick" aria-pressed="${it.state === 'yes'}" title="${it.state === 'yes' ? 'Done: click to undo' : 'Mark this step done'}">${I.check}</button></span>`;
+  const nb = `<button class="nb${live.length ? ' has' : ''}${isNo ? ' isno' : ''}${it.open || it.form ? ' open' : ''}" type="button" data-act="notes" title="${live.length ? 'Show or hide the notes' : 'Add a note or a picture'}" aria-expanded="${!!(it.open || it.form)}">${live.length ? `<span>${live.length}</span>` : ''}</button>`;
+  if (it.kind === 'step') return `<span class="ans">${nb}<button class="tick${it.state === 'yes' ? ' on' : ''}" type="button" data-act="tick" aria-pressed="${it.state === 'yes'}" title="${it.state === 'yes' ? 'Done: click to undo' : 'Mark this step done'}"></button></span>`;
   return `<span class="ans">${nb}<span class="yn"><button class="y${it.state === 'yes' ? ' on' : ''}" type="button" data-act="yes" aria-pressed="${it.state === 'yes'}">Yes</button><button class="n${isNo ? ' on' : ''}" type="button" data-act="no" aria-pressed="${isNo}">No</button></span></span>`;
 }
-function noteRowHtml(it) {
-  return `<tr class="r-n${it.rel > 0 ? ' sub' : ''}" data-n="${it.gid}"><td class="c-num"></td><td class="nc" colspan="2">${notesHtml(it)}</td></tr>`;
+const noteCells = it => `<td class="c-num"></td><td class="nc" colspan="2">${notesHtml(it)}</td>`;
+const findOn = () => findState.marks.length > 0;
+const hasCells = r => findOn() || rowShown(r);
+const hasNoteCells = it => findOn() || !!it.form || noteShown(it);
+/** Draw a row's cells (a heading's or a block's count in them too), or take them out. */
+function fillRow(r) {
+  r.el.innerHTML = rowCells(r);
+  if (r.k === 'h') { r.ansEl = r.el.querySelector('[data-hans]'); setHtml(r.ansEl, headAns(r)); }
+  if (r.k === 'b') { r.ansEl = r.el.querySelector('[data-bans]'); blockAns(r); }
+}
+function emptyRow(r) { r.el.textContent = ''; if (r.k === 'h' || r.k === 'b') r.ansEl = null; }
+/** Every row with its cells: for Find, and for a link to a place inside a folded test. */
+function fillAll() {
+  for (const p of parts) {
+    if (!p.table) continue;
+    for (const r of p.rows) {
+      if (r.el && !r.el.firstChild) fillRow(r);
+      if (r.k === 'i' && r.nel && !r.nel.firstChild) r.nel.innerHTML = noteCells(r);
+    }
+  }
 }
 function notesHtml(it) {
   const out = it.notes.map(n => {
@@ -217,12 +322,12 @@ function notesHtml(it) {
 function picHtml(p) {
   const saved = !p.pending;
   return `<span class="pic" role="button" tabindex="0" data-act="view" data-src="${esc(p.path)}" title="${esc(p.label)}: open"><img src="${esc(p.path)}" alt="${esc(p.label)}"><span class="pl">${esc(p.label)}</span>`
-    + `${saved ? `<button class="px" type="button" data-act="delpic" data-path="${esc(p.path)}" aria-label="Delete ${esc(p.label)}">${I.x}</button>` : ''}</span>`;
+    + `${saved ? `<button class="px" type="button" data-act="delpic" data-path="${esc(p.path)}" aria-label="Delete ${esc(p.label)}"></button>` : ''}</span>`;
 }
 function formHtml(it) {
   const f = it.form;
   const max = doc ? doc.outline.pictureMax : 0;
-  const pend = f.pics.map((p, i) => `<span class="pic${p.failed ? ' failed' : ''}" data-act="view" data-src="${esc(p.src)}">${p.src ? `<img src="${esc(p.src)}" alt="">` : '<span class="hint">reading…</span>'}<span class="pl">img${max + i + 1}</span><button class="px" type="button" data-act="leaveout" data-i="${i}" aria-label="Leave out">${I.x}</button></span>`).join('');
+  const pend = f.pics.map((p, i) => `<span class="pic${p.failed ? ' failed' : ''}" data-act="view" data-src="${esc(p.src)}">${p.src ? `<img src="${esc(p.src)}" alt="">` : '<span class="hint">reading…</span>'}<span class="pl">img${max + i + 1}</span><button class="px" type="button" data-act="leaveout" data-i="${i}" aria-label="Leave out"></button></span>`).join('');
   const isNo = f.type === 'no';
   return `<div class="form${isNo ? ' no' : ''}" data-form="${it.gid}"><textarea placeholder="${isNo ? 'What did you see instead?' : 'A note'} Paste or drop a screenshot here.">${esc(f.text)}</textarea>`
     + `<div class="pics">${pend}</div><div class="f-row"><button class="btn ${isNo ? 'save-no' : 'save-note'}" type="button" data-act="save">${isNo ? 'Save No' : 'Save note'}</button>`
@@ -230,17 +335,17 @@ function formHtml(it) {
 }
 function foldBar(scope, id, what) {
   return `<div class="foldbar" role="group" aria-label="Fold ${what}">`
-    + `<button type="button" data-fold="collapse" data-scope="${scope}" data-id="${id}" title="Collapse ${what}">${I.collapse}<span>Collapse${scope === 'all' ? ' all' : ''}</span></button>`
-    + `<button type="button" data-fold="expand" data-scope="${scope}" data-id="${id}" title="Expand ${what}">${I.expand}<span>Expand${scope === 'all' ? ' all' : ''}</span></button></div>`;
+    + `<button type="button" data-fold="collapse" data-scope="${scope}" data-id="${id}" title="Collapse ${what}"><span>Collapse${scope === 'all' ? ' all' : ''}</span></button>`
+    + `<button type="button" data-fold="expand" data-scope="${scope}" data-id="${id}" title="Expand ${what}"><span>Expand${scope === 'all' ? ' all' : ''}</span></button></div>`;
 }
 function partHtml(p) {
-  const cv = I.chev.replace('<svg', '<svg class="cv"');
+  const cv = '<span class="cv ic-chev"></span>';
   if (!p.table) {
-    const body = p.intro.join('') + p.rows.map(r => r.k === 'h' ? `<h3 id="${esc(r.id)}">${r.title}</h3>${r.intro ? `<p>${r.intro}</p>` : ''}` : r.k === 'p' ? r.html : '').join('');
+    const body = tight(p.intro.join('') + p.rows.map(r => r.k === 'h' ? `<h3 id="${esc(r.id)}">${r.title}</h3>${r.intro ? `<p>${r.intro}</p>` : ''}` : r.k === 'p' ? r.html : '').join(''));
     if (!p.title) return `<section class="part" id="${esc(p.id)}" data-p="${p.idx}"><div class="md">${body}</div></section>`;
     return `<section class="part" id="${esc(p.id)}" data-p="${p.idx}"><details class="prose"><summary>${cv}<h2>${p.num ? `Part ${esc(p.num)} · ` : ''}${p.title}</h2><span class="hint">Read</span></summary><div class="md">${body}</div></details></section>`;
   }
-  const about = p.intro.length ? `<details class="about"><summary>${cv}<b>About this part</b><span>${esc(plain(p.intro[0]).slice(0, 90))}…</span></summary><div class="md">${p.intro.join('')}</div></details>` : '';
+  const about = p.intro.length ? `<details class="about"><summary>${cv}<b>About this part</b><span>${esc(plain(p.intro[0]).slice(0, 90))}…</span></summary><div class="md">${tight(p.intro.join(''))}</div></details>` : '';
   const eyebrow = p.num ? 'Part ' + esc(p.num) : '';
   return `<section class="part" id="${esc(p.id)}" data-p="${p.idx}"><div class="part-hd"><div class="ph">${eyebrow ? `<div class="eyebrow">${eyebrow}</div>` : ''}<h2>${p.title || esc(doc.title)}${p.title ? copyBtn(p.num, p.title, true) : ''}</h2></div>${foldBar('p', p.idx, 'every test in this part')}<div class="meter" data-meter="${p.idx}"></div></div>${about}`
     + `<table class="grid"><colgroup><col class="c1"><col><col class="c3"></colgroup><thead><tr><th>#</th><th>Step</th><th>Answer</th></tr></thead><tbody>${p.rows.map(rowHtml).join('')}</tbody></table></section>`;
@@ -250,21 +355,17 @@ function drawAll() {
   $('#docTitle').title = doc.title;
   content.innerHTML = `<div class="docbar"><span class="hint">Collapse shows one row per test. Alt+click a test's arrow to fold or open every test of its level in that part.</span>${foldBar('all', 0, 'every test in every part')}</div>`
     + parts.map(partHtml).join('');
-  // One pass over the page to find every row, instead of one search per row.
+  // One pass over each part to find its rows, instead of one search per row.
   allRows.forEach(r => { r.el = null; });
-  content.querySelectorAll('tr[data-g]').forEach(tr => { allRows[+tr.dataset.g].el = tr; });
-  content.querySelectorAll('tr[data-n]').forEach(tr => { allRows[+tr.dataset.n].nel = tr; });
   content.querySelectorAll('section[data-p]').forEach(s => { parts[+s.dataset.p].el = s; });
-  heads.forEach(h => { if (!h.el && h.id) h.el = document.getElementById(h.id); h.ansEl = h.el && h.el.querySelector('[data-hans]'); });
-  blocks.forEach(b => { b.ansEl = b.el && b.el.querySelector('[data-bans]'); });
-  parts.forEach(p => { p.meterEl = p.el.querySelector('[data-meter]'); });
+  wire(parts);
   spyPart = spyHead = undefined;
   drawToc();
   refresh();
 }
 function redrawItem(it) {
   const a = document.createElement('tbody');
-  a.innerHTML = itemHtml(it) + noteRowHtml(it);
+  a.innerHTML = rowHtml(it);
   const [row, nrow] = a.children;
   // A row of the highlighted section stays highlighted when it is drawn again.
   for (const [old, now] of [[it.el, row], [it.nel, nrow]]) {
@@ -283,13 +384,14 @@ function headAns(h) {
   if (t.answered === t.total && t.no === 0 && !h.group) return '<button class="markdone" type="button" data-act="markdone">Mark test done</button>';
   return `<span class="prog" title="${tallyTitle(t)}"><span>${tallyText(t)}</span>${tallyBar(t)}</span>`;
 }
+function blockAns(b) {
+  if (!b.ansEl) return;
+  const t = tally(b.items);
+  setHtml(b.ansEl, `<span class="bt" title="${tallyTitle(t)}">${tallyText(t)}</span>`);
+}
 function refresh() {
   heads.forEach(h => setHtml(h.ansEl, headAns(h)));
-  blocks.forEach(b => {
-    if (!b.ansEl) return;
-    const t = tally(b.items);
-    setHtml(b.ansEl, `<span class="bt" title="${tallyTitle(t)}">${tallyText(t)}</span>`);
-  });
+  blocks.forEach(blockAns);
   parts.forEach(p => {
     if (!p.meterEl) return;
     const t = tally(p.items);
@@ -318,7 +420,7 @@ function drawToc() {
   $('#tocTree').innerHTML = parts.map(p => {
     const kids = p.heads.filter(h => h.rel <= 2).map(h => `<a class="th lv${h.rel}${h.done ? ' done' : ''}" href="#${esc(h.id)}" data-h="${h.gid}"><span class="hn">${esc(h.num)}</span><span class="ht">${esc(h.plain)}</span>${h.done ? '<span class="pill success">Done</span>' : '<span class="tc" data-tdot></span>'}</a>`).join('');
     const open = ui.tocOpen[p.id || p.idx] ? ' open' : '';
-    return `<div class="tp${open}" data-p="${p.idx}"><button class="tp-row" type="button" data-act="tpart">${kids ? `<span class="cv">${I.chev}</span>` : '<span class="cv" style="width:14px"></span>'}<span class="tn">${esc(p.num)}</span><span class="tt">${esc(p.plain)}</span><span class="tc" data-tc></span></button>${kids ? `<div class="tp-kids">${kids}</div>` : ''}</div>`;
+    return `<div class="tp${open}" data-p="${p.idx}"><button class="tp-row" type="button" data-act="tpart">${kids ? '<span class="cv ic-chev"></span>' : '<span class="cv" style="width:14px"></span>'}<span class="tn">${esc(p.num)}</span><span class="tt">${esc(p.plain)}</span><span class="tc" data-tc></span></button>${kids ? `<div class="tp-kids">${kids}</div>` : ''}</div>`;
   }).join('');
   parts.forEach(p => { p.tocEl = null; p.tocKids = []; });
   heads.forEach(h => { h.tocEl = null; });
@@ -433,22 +535,35 @@ $('#tocFold').addEventListener('click', () => { ui.tocOpen = {}; $$('#tocTree .t
 const match = it => ui.filter === 'all' || (ui.filter === 'todo' && isLeft(it)) || (ui.filter === 'no' && it.state === 'no')
   || (ui.filter === 'notes' && it.notes.some(n => n.type !== 'old'));
 function hiddenByFold(r) { for (let h = r.k === 'h' ? r.parent : r.head; h; h = h.parent) if (h.folded) return true; return false; }
+/** Is a row of a table shown: not under a folded test, and kept by the filter? */
+function rowShown(r) {
+  if (hiddenByFold(r)) return false;
+  if (ui.filter === 'all') return true;
+  if (r.k === 'h' || r.k === 'b') return r.items.some(match);
+  return r.k === 'i' && match(r);
+}
+const noteShown = it => rowShown(it) && (!!it.form || it.open || (ui.openNotes && it.notes.length > 0));
 function applyVisibility() {
   const filtering = ui.filter !== 'all';
+  const keep = findOn();
   parts.forEach(p => {
     if (!p.table) { p.el.hidden = filtering; return; }
     p.el.hidden = filtering && !p.items.some(match);
     p.rows.forEach(r => {
-      let show = !hiddenByFold(r);
-      if (show && filtering) {
-        if (r.k === 'h' || r.k === 'b') show = r.items.some(match);
-        else if (r.k === 'i') show = match(r);
-        else show = false;
-      }
+      const show = rowShown(r);
       const el = r.el;
-      if (el) el.classList.toggle('gone', !show);
+      if (el) {
+        el.classList.toggle('gone', !show);
+        if (show && !el.firstChild) fillRow(r);
+        else if (!show && !keep && el.firstChild) emptyRow(r);
+      }
       if (r.k === 'h' && el) el.classList.toggle('folded', !!r.folded);
-      if (r.k === 'i') r.nel.classList.toggle('gone', !(show && (!!r.form || r.open || (ui.openNotes && r.notes.length > 0))));
+      if (r.k === 'i') {
+        const on = noteShown(r);
+        r.nel.classList.toggle('gone', !on);
+        if (on && !r.nel.firstChild) r.nel.innerHTML = noteCells(r);
+        else if (!on && !keep && !r.form && r.nel.firstChild) r.nel.textContent = '';
+      }
     });
   });
   // Rows a fold or the filter brought back join the highlighted section again.
@@ -551,7 +666,12 @@ content.addEventListener('click', e => {
   if (link && !e.target.closest('[data-act="fold"] button')) {
     e.preventDefault();
     const href = link.getAttribute('href');
-    if (href.startsWith('#')) { const el = document.getElementById(decodeURIComponent(href.slice(1))); if (el) goTo(el, false, true); }
+    if (href.startsWith('#')) {
+      const id = decodeURIComponent(href.slice(1));
+      let el = document.getElementById(id);
+      if (!el) { fillAll(); el = document.getElementById(id); }
+      if (el) goTo(el, false, true);
+    }
     else vscode.postMessage({ type: 'open', href });
     return;
   }
@@ -638,6 +758,7 @@ function reveal(el) {
 function goTo(el, flash, atTop) {
   if (!el) return;
   reveal(el);
+  drawAround(el);
   const mr = main.getBoundingClientRect(), er = el.getBoundingClientRect();
   main.scrollTop += er.top - mr.top - (atTop ? (el.tagName === 'TR' ? 52 : 12) : mr.height / 3);
   if (flash) { el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
@@ -771,7 +892,26 @@ function restoreAnchor(a) {
   else if (a.key && a.key.startsWith('h:')) el = document.getElementById(a.key.slice(2));
   if (!el && allRows[a.gid]) el = allRows[a.gid].el;
   if (!el) return;
+  drawAround(el);
   main.scrollTop += el.getBoundingClientRect().top - main.getBoundingClientRect().top - a.off;
+}
+/** A part far from the screen is not drawn (content-visibility) and stands in at a guessed height until it comes near.
+ * Before going to a place, draw the parts around it, a screen above and two below, so it lands where the place really
+ * is and nothing near it changes height once it is on screen. They go back to drawing themselves two frames later. */
+function drawAround(el) {
+  const sec = el.closest('section.part');
+  if (!sec) return;
+  const h = main.clientHeight, drawn = [sec];
+  sec.classList.add('cv-on');
+  let up = el.getBoundingClientRect().top - sec.getBoundingClientRect().top;
+  for (let s = sec.previousElementSibling; s && s.matches('section.part') && up < h; s = s.previousElementSibling) {
+    s.classList.add('cv-on'); drawn.push(s); up += s.offsetHeight;
+  }
+  let down = sec.getBoundingClientRect().bottom - el.getBoundingClientRect().top;
+  for (let s = sec.nextElementSibling; s && s.matches('section.part') && down < 2 * h; s = s.nextElementSibling) {
+    s.classList.add('cv-on'); drawn.push(s); down += s.offsetHeight;
+  }
+  requestAnimationFrame(() => requestAnimationFrame(() => drawn.forEach(s => s.classList.remove('cv-on'))));
 }
 
 // ── The contents: menu button, resize ────────────────────────────────────────────────────────────────────────────
@@ -972,6 +1112,7 @@ function runFind(jump) {
   const q = findState.q;
   const fc = $('#findCount');
   if (q.length < 2) { fc.textContent = ''; fc.className = 'fc'; return; }
+  fillAll();
   const needle = findState.matchCase ? q : q.toLowerCase();
   const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT, {
     acceptNode: n => n.parentElement.closest('button, textarea, .c-ans, .meter, summary span, .docbar') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
@@ -1051,12 +1192,9 @@ window.addEventListener('message', ({ data: m }) => {
   doc = m; who = m.who || ''; today = m.today || '';
   items.forEach(it => { if (it.form) forms[it.key] = it.form; });
   stamp(m.outline);
-  if (!first && !titleChanged && patch(m.outline)) {
-    // Same rows as on the page: the changed ones were drawn again in place, nothing moved. The page's rows are the
-    // model now, so the message's own copy of every row is let go.
+  if (!first && !titleChanged && update(m.outline)) {
+    // Only what changed was drawn again. The page's parts are the model now, so the message's own copy is let go.
     doc = { ...m, outline: { title: m.outline.title, pictureMax: m.outline.pictureMax, parts: [] } };
-    if (findState.q) runFind(false);
-    spy();
     return;
   }
   const anchor = first ? view.scroll : anchorNow();
