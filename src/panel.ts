@@ -3,7 +3,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { applyAnswer, markDone, renumberPictures, Action, Picture } from './core/model';
-import { buildOutline } from './core/outline';
+import { OutlineBuilder } from './core/outline';
 import { panelBody } from './panelHtml';
 import { settings, userName, today } from './settings';
 import { applyTextChange, archiveRound, deletePicture, savePicture, sweepPictures } from './files';
@@ -48,6 +48,12 @@ export class ChecklistPanel {
   private again = false;
   private stale = false;
   private disposed = false;
+  /** The next render sends the checklist even if this version was sent already (the page reloaded, a setting changed). */
+  private forceNext = false;
+  /** The document and version last sent: the same again is not sent twice. */
+  private sent: { doc: vscode.TextDocument; version: number } | undefined;
+  /** Keeps the pieces of the checklist it read last, so a change re-reads only its own piece. */
+  private readonly outlines = new OutlineBuilder();
 
   static show(context: vscode.ExtensionContext, uri: vscode.Uri): void {
     const open = ChecklistPanel.panels.get(uri.toString());
@@ -69,11 +75,12 @@ export class ChecklistPanel {
     vscode.workspace.onDidChangeConfiguration(e => {
       if (e.affectsConfiguration('testmd.panelTheme')) void panel.webview.postMessage({ type: 'theme', theme: panelTheme() });
       if (e.affectsConfiguration('testmd.colors')) void panel.webview.postMessage({ type: 'colors', colors: panelColors() });
-      if (e.affectsConfiguration('testmd.stepLabels')) void this.render();
+      if (e.affectsConfiguration('testmd.stepLabels')) void this.render(true);
     }, null, this.disposables);
-    // Typing in the .md redraws once a pause in the typing, not per key.
+    // Typing in the .md redraws once a pause in the typing, not per key. Saving fires a change with no changes in it (only
+    // the dirty mark flips): nothing to draw.
     vscode.workspace.onDidChangeTextDocument(e => {
-      if (e.document.uri.toString() !== uri.toString()) return;
+      if (e.document.uri.toString() !== uri.toString() || e.contentChanges.length === 0) return;
       clearTimeout(this.timer);
       this.timer = setTimeout(() => void this.render(), 250);
     }, null, this.disposables);
@@ -108,10 +115,12 @@ ${panelBody()}
 </body></html>`;
   }
 
-  /** Send the checklist to the page. Skipped while the tab is hidden (drawn when it shows), and never two at once:
-   * a change during a render is drawn by one more render after it. */
-  private async render(): Promise<void> {
+  /** Send the checklist to the page. Skipped while the tab is hidden (drawn when it shows), never two at once (a change
+   * during a render is drawn by one more render after it), and skipped when this version of the file is already on the
+   * page (an answer draws it once, not again when it is saved). */
+  private async render(force = false): Promise<void> {
     clearTimeout(this.timer);
+    if (force) this.forceNext = true;
     if (this.disposed) return;
     if (!this.panel.visible) { this.stale = true; return; }
     if (this.rendering) { this.again = true; return; }
@@ -119,7 +128,10 @@ ${panelBody()}
     this.stale = false;
     try {
       const doc = await vscode.workspace.openTextDocument(this.uri);
-      const outline = buildOutline(doc.getText(), settings(this.uri).stepLabels);
+      const version = doc.version;
+      if (!this.forceNext && this.sent?.doc === doc && this.sent.version === version) return;
+      this.forceNext = false;
+      const outline = this.outlines.build(doc.getText(), settings(this.uri).stepLabels);
       const folder = vscode.workspace.getWorkspaceFolder(this.uri);
       await this.panel.webview.postMessage({
         type: 'render', outline, title: outline.title || path.basename(this.uri.fsPath),
@@ -127,6 +139,7 @@ ${panelBody()}
         theme: panelTheme(), colors: panelColors(), tocWidth: this.context.globalState.get<number>(TOC_WIDTH_KEY),
         ui: this.context.globalState.get<object>(UI_KEY), who: await userName(this.uri), today: today(),
       });
+      this.sent = { doc, version };
     } finally {
       this.rendering = false;
       if (this.again && !this.disposed) { this.again = false; void this.render(); }
@@ -137,7 +150,7 @@ ${panelBody()}
     try {
       if (m.type === 'ready') {
         if (!this.swept) { this.swept = true; await sweepPictures(this.uri); }
-        return void (await this.render());
+        return void (await this.render(true));
       }
       if (m.type === 'open' && typeof m.href === 'string') return void (await this.open(m.href));
       if (m.type === 'theme' && (m.value === 'auto' || m.value === 'light' || m.value === 'dark')) {
@@ -175,7 +188,7 @@ ${panelBody()}
       if (m.type === 'markDone' && typeof m.line === 'number') await this.edit(text => markDone(text, m.line!));
     } catch (err) {
       void vscode.window.showWarningMessage(`TestMD: ${err instanceof Error ? err.message : String(err)}`);
-      await this.render();
+      await this.render(true);
     }
   }
 
