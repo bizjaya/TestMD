@@ -758,6 +758,7 @@ function reveal(el) {
 function goTo(el, flash, atTop) {
   if (!el) return;
   reveal(el);
+  drawAround(el);
   const mr = main.getBoundingClientRect(), er = el.getBoundingClientRect();
   main.scrollTop += er.top - mr.top - (atTop ? (el.tagName === 'TR' ? 52 : 12) : mr.height / 3);
   if (flash) { el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
@@ -891,7 +892,26 @@ function restoreAnchor(a) {
   else if (a.key && a.key.startsWith('h:')) el = document.getElementById(a.key.slice(2));
   if (!el && allRows[a.gid]) el = allRows[a.gid].el;
   if (!el) return;
+  drawAround(el);
   main.scrollTop += el.getBoundingClientRect().top - main.getBoundingClientRect().top - a.off;
+}
+/** A part far from the screen is not drawn (content-visibility) and stands in at a guessed height until it comes near.
+ * Before going to a place, draw the parts around it, a screen above and two below, so it lands where the place really
+ * is and nothing near it changes height once it is on screen. They go back to drawing themselves two frames later. */
+function drawAround(el) {
+  const sec = el.closest('section.part');
+  if (!sec) return;
+  const h = main.clientHeight, drawn = [sec];
+  sec.classList.add('cv-on');
+  let up = el.getBoundingClientRect().top - sec.getBoundingClientRect().top;
+  for (let s = sec.previousElementSibling; s && s.matches('section.part') && up < h; s = s.previousElementSibling) {
+    s.classList.add('cv-on'); drawn.push(s); up += s.offsetHeight;
+  }
+  let down = sec.getBoundingClientRect().bottom - el.getBoundingClientRect().top;
+  for (let s = sec.nextElementSibling; s && s.matches('section.part') && down < 2 * h; s = s.nextElementSibling) {
+    s.classList.add('cv-on'); drawn.push(s); down += s.offsetHeight;
+  }
+  requestAnimationFrame(() => requestAnimationFrame(() => drawn.forEach(s => s.classList.remove('cv-on'))));
 }
 
 // ── The contents: menu button, resize ────────────────────────────────────────────────────────────────────────────

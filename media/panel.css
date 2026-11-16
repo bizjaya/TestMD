@@ -174,6 +174,9 @@ tr.sec-on > :first-child { box-shadow: inset 2px 0 0 var(--link); }
 
 /* ── A part: its header, what it is about, then its table ─────────────────────────────────────────────── */
 .part { margin: 0 0 40px; scroll-margin-top: 8px; }
+/* A part off screen is not laid out or painted until it comes near: the page draws and scrolls as fast as one screen. */
+section.part { content-visibility: auto; contain-intrinsic-size: auto 900px; }
+section.part.cv-on { content-visibility: visible; }
 .part[hidden] { display: none; }
 .part-hd { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 10px; }
 .part-hd .ph { flex: 1; min-width: 0; }
